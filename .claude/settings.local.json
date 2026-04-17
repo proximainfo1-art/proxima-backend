@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "WebFetch(domain:res.cloudinary.com)",
+      "Bash(curl:*)",
+      "Bash(python:*)"
+    ]
+  }
+}
