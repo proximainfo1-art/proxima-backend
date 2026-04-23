@@ -1,0 +1,1004 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+const Shield = () => <span>✓</span>;
+const MessageCircle = () => <span>💬</span>;
+const Clock = () => <span>⏱</span>;
+const ChevronRight = () => <span>→</span>;
+const X = ({ onClick }) => <span onClick={onClick} style={{cursor:'pointer'}}>✕</span>;
+const ArrowLeft = () => <span>←</span>;
+const Check = () => <span>✓</span>;
+const AlertCircle = () => <span>⚠</span>;
+const LogOut = () => <span>↩</span>;
+const Plus = () => <span>+</span>;
+const Trash2 = () => <span>🗑</span>;
+const Edit2 = () => <span>✏</span>;
+const Eye = () => <span>👁</span>;
+const EyeOff = () => <span>🚫</span>;
+const Flag = () => <span>🚩</span>;
+const Upload = () => <span>↑</span>;
+const Search = () => <span>🔍</span>;
+const Star = () => <span>★</span>;
+
+const ADMIN_PASSWORD = "Kusu@Manku0430";
+const ADMIN_WHATSAPP = "919354249942";
+const CLOUDINARY_CLOUD_NAME = "dlzqb06u6";
+const CLOUDINARY_UPLOAD_PRESET = "proxima_mentors";
+const API_BASE = "https://proxima-backend-hdho.onrender.com/api";
+
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+function generateTimeSlots() {
+  const slots = [];
+  for (let h = 6; h < 23; h++) {
+    slots.push(`${h.toString().padStart(2,"0")}:00`);
+    slots.push(`${h.toString().padStart(2,"0")}:30`);
+  }
+  return slots;
+}
+
+function formatTime(t) {
+  const [h, m] = t.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const hr = h % 12 || 12;
+  return `${hr}:${m.toString().padStart(2,"0")} ${ampm}`;
+}
+
+function generateSlotsFromRanges(ranges) {
+  const all = [];
+  ranges.forEach(({ from, to, day }) => {
+    const times = generateTimeSlots();
+    const fromIdx = times.indexOf(from);
+    const toIdx = times.indexOf(to);
+    if (fromIdx === -1 || toIdx === -1 || toIdx <= fromIdx) return;
+    for (let i = fromIdx; i < toIdx; i++) {
+      all.push({ day, time: times[i], display: `${day} ${formatTime(times[i])}`, status: "available" });
+    }
+  });
+  return all;
+}
+
+function wa(number, text) {
+  window.open(`https://wa.me/${number}?text=${encodeURIComponent(text)}`, "_blank");
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json", ...options.headers },
+    ...options,
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function uploadToCloudinary(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: formData });
+  const data = await res.json();
+  return data.secure_url;
+}
+
+const S = {
+  bg: "#111111", text: "#FFFFFF", accent: "#E93800", blue: "#0000AF",
+  card: "#1C1C1C", border: "#2A2A2A", adminBg: "#0A0A0A",
+};
+
+const css = `
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: ${S.bg}; color: ${S.text}; font-family: 'DM Sans', sans-serif; }
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: ${S.bg}; } ::-webkit-scrollbar-thumb { background: ${S.border}; }
+  .serif { font-family: 'Playfair Display', serif; }
+  .grain::before { content:''; position:fixed; inset:0; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E"); pointer-events:none; z-index:9999; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes slideIn { from { opacity:0; transform:translateX(32px); } to { opacity:1; transform:translateX(0); } }
+  .fade-up { animation: fadeUp 0.5s ease forwards; }
+  .slide-in { animation: slideIn 0.4s ease forwards; }
+  input, textarea, select { background: #222; border: 1px solid ${S.border}; color: ${S.text}; border-radius: 8px; padding: 12px 16px; width: 100%; font-family: 'DM Sans', sans-serif; font-size: 15px; outline: none; transition: border 0.2s; }
+  input:focus, textarea:focus, select:focus { border-color: ${S.accent}; }
+  button { cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
+  .btn-primary { background: ${S.accent}; color: #fff; border: none; padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 500; }
+  .btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
+  .btn-secondary { background: transparent; color: ${S.text}; border: 1px solid ${S.border}; padding: 12px 28px; border-radius: 8px; font-size: 15px; }
+  .btn-secondary:hover { border-color: ${S.accent}; color: ${S.accent}; }
+  .btn-blue { background: ${S.blue}; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; }
+  .mentor-card { background: ${S.card}; border: 1px solid ${S.border}; border-radius: 16px; padding: 24px; transition: all 0.3s; cursor: pointer; }
+  .mentor-card:hover { border-color: ${S.accent}; transform: translateY(-4px); box-shadow: 0 20px 40px rgba(233,56,0,0.1); }
+  .pill { padding: 6px 14px; border-radius: 20px; font-size: 13px; border: 1px solid ${S.border}; cursor: pointer; transition: all 0.2s; }
+  .pill:hover { border-color: ${S.accent}; color: ${S.accent}; }
+  .pill.booked { opacity: 0.3; cursor: not-allowed; text-decoration: line-through; }
+  .pill.selected { background: ${S.accent}; border-color: ${S.accent}; color: #fff; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+  .modal { background: ${S.card}; border: 1px solid ${S.border}; border-radius: 20px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; padding: 32px; position: relative; }
+  .star { color: #FFB800; }
+  .progress-bar { height: 3px; background: ${S.border}; border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: ${S.accent}; border-radius: 2px; transition: width 0.4s ease; }
+  .admin-panel { background: ${S.adminBg}; min-height: 100vh; }
+  .admin-tab { padding: 10px 20px; border: none; background: transparent; color: #888; font-size: 14px; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .admin-tab.active { color: ${S.accent}; border-bottom-color: ${S.accent}; }
+  .stat-card { background: ${S.card}; border: 1px solid ${S.border}; border-radius: 12px; padding: 20px; }
+  .badge-pending { background: rgba(233,56,0,0.15); color: ${S.accent}; padding: 3px 10px; border-radius: 20px; font-size: 12px; }
+`;
+
+function Stars({ rating }) {
+  return (
+    <span>
+      {[1,2,3,4,5].map(i => (
+        <span key={i} className="star" style={{ opacity: i <= Math.round(rating) ? 1 : 0.2 }}>★</span>
+      ))}
+      <span style={{ color: "#888", fontSize: 13, marginLeft: 4 }}>{rating?.toFixed(1)}</span>
+    </span>
+  );
+}
+
+function Landing({ onMentee, onMentor }) {
+  const LIGHT_LOGO = "https://res.cloudinary.com/dlzqb06u6/image/upload/v1775389312/wbzrczuoo9swrhfvxhrx.png";
+  const STUDENT_PHOTO = "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&q=80";
+
+  return (
+    <div style={{ background: "#FAF7F2", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif", color: "#111" }}>
+      <style>{`
+        .l-nav { display:flex; align-items:center; justify-content:space-between; padding:18px 48px; border-bottom:1px solid #E8E2D9; background:#FAF7F2; }
+        .l-hero { display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:center; padding:64px 48px; max-width:1200px; margin:0 auto; }
+        .btn-dark { background:#111; color:#fff; border:none; padding:12px 24px; border-radius:8px; font-size:14px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif; transition:opacity 0.2s; }
+        .btn-dark:hover { opacity:0.82; }
+        .btn-out { background:transparent; color:#111; border:1.5px solid #111; padding:12px 24px; border-radius:8px; font-size:14px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif; transition:all 0.2s; }
+        .btn-out:hover { background:#111; color:#fff; }
+        .bubble { position:absolute; background:#fff; border-radius:12px; padding:11px 15px; font-size:12.5px; color:#111; box-shadow:0 4px 20px rgba(0,0,0,0.10); max-width:210px; line-height:1.5; font-weight:500; }
+        .partner-logo { height:34px; object-fit:contain; filter:grayscale(1); opacity:0.55; }body { background: #FAF7F2 !important; }
+        @media(max-width:768px){
+          .l-nav { padding:14px 20px; }
+          .l-nav .btn-out { display:none; }
+          .l-hero { grid-template-columns:1fr; padding:28px 20px; }
+          .l-right { order:-1; }
+          .bubble-2 { display:none !important; }
+        }
+      `}</style>
+
+      {/* Navbar */}
+      <nav className="l-nav">
+        <img src={LIGHT_LOGO} alt="Proxima" style={{ height: 30, objectFit: "contain" }} />
+        <div style={{ display: "flex", gap: 12 }}>
+          <button className="btn-dark" onClick={onMentee}>Get Real College Guidance</button>
+          <button className="btn-out" onClick={onMentor}>Join As A Guide</button>
+        </div>
+      </nav>
+
+      {/* Hero */}
+      <div className="l-hero">
+
+        {/* Left */}
+        <div className="fade-up">
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 3, color: "#888", textTransform: "uppercase", marginBottom: 20 }}>Built by students, for students</div>
+          <h1 style={{ fontSize: "clamp(30px,4vw,52px)", fontWeight: 800, lineHeight: 1.15, marginBottom: 20 }}>
+            Make informed<br />college decisions with<br />
+            <span style={{ color: "#E93800", fontStyle: "italic" }}>real student guidance</span>
+          </h1>
+          <p style={{ color: "#666", fontSize: 15, lineHeight: 1.75, maxWidth: 420, marginBottom: 32 }}>
+            Connect with current college students through 30 minute 1:1 calls to understand admissions, academics, campus life, and make the right choice.
+          </p>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 48 }}>
+            <button className="btn-dark" style={{ padding: "13px 28px", fontSize: 15 }} onClick={onMentee}>Get Real College Guidance</button>
+            <button className="btn-out" style={{ padding: "13px 28px", fontSize: 15 }} onClick={onMentor}>Join As A Guide</button>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>In partnership with mentors from top colleges</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+              {["SRCC", "NMIMS", "Hindu"].map(name => (
+                <div key={name} style={{ background: "#eee", borderRadius: 6, padding: "4px 12px", fontSize: 12, color: "#555", fontWeight: 600 }}>{name}</div>
+              ))}
+              <span style={{ fontSize: 13, color: "#888" }}>+13 more</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right */}
+        <div className="l-right fade-up" style={{ position: "relative", display: "flex", justifyContent: "center", animationDelay: "0.15s" }}>
+          <img src={STUDENT_PHOTO} alt="Student" style={{ width: "100%", maxWidth: 420, height: 440, objectFit: "cover", objectPosition: "top", borderRadius: 24, display: "block" }} />
+          <div className="bubble" style={{ top: 32, right: -10 }}>Are societies actually worth joining?</div>
+          <div className="bubble bubble-2" style={{ top: "42%", left: -30 }}>Should I prioritise brand name or course?</div>
+          <div className="bubble" style={{ bottom: 48, right: -10 }}>Is attendance strict in Delhi University colleges?</div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+function MentorCard({ mentor, onClick, delay }) {
+  return (
+    <div className="mentor-card fade-up" style={{ animationDelay: `${delay}s` }} onClick={() => onClick(mentor)}>
+      <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+        <img src={mentor.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(mentor.name)}&background=1C1C1C&color=E93800&size=80`}
+          alt={mentor.name} style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: `2px solid ${S.border}` }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 2 }}>{mentor.name}</div>
+          <div style={{ color: S.accent, fontSize: 13, marginBottom: 4 }}>{mentor.college}</div>
+          <div style={{ color: "#888", fontSize: 12 }}>{mentor.course} · {mentor.year}</div>
+        </div>
+      </div>
+      <Stars rating={mentor.rating || 5} />
+      <div style={{ color: "#888", fontSize: 12, marginTop: 4 }}>{mentor.sessions || 0} sessions</div>
+      <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontWeight: 600, color: S.accent }}>₹{mentor.price || 250}<span style={{ color: "#888", fontWeight: 400, fontSize: 12 }}>/session</span></div>
+        <button className="btn-primary" style={{ padding: "8px 18px", fontSize: 13 }}>View Profile</button>
+      </div>
+    </div>
+  );
+}
+
+function MentorDiscovery({ onBook }) {
+  const [mentors, setMentors] = useState([]);
+  const [filter, setFilter] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try { const data = await apiFetch("/mentors"); setMentors(data); }
+    catch { setMentors([]); } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [load]);
+
+  const colleges = [...new Set(mentors.map(m => m.college))];
+  const filtered = filter ? mentors.filter(m => m.college === filter) : mentors;
+
+  return (
+    <div style={{ minHeight: "100vh", padding: "40px 20px", maxWidth: 1100, margin: "0 auto" }}>
+      <div className="fade-up" style={{ marginBottom: 40 }}>
+        <h1 className="serif" style={{ fontSize: "clamp(28px,5vw,48px)", fontWeight: 800, marginBottom: 8 }}>Talk to a real senior<br />before you choose your college</h1>
+        <p style={{ color: "#888" }}>{mentors.length}+ mentors across Delhi University colleges</p>
+      </div>
+      <div style={{ marginBottom: 28, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <button className="pill" style={{ background: !filter ? S.accent : "transparent", borderColor: !filter ? S.accent : S.border, color: !filter ? "#fff" : S.text }} onClick={() => setFilter("")}>All Colleges</button>
+        {colleges.map(c => (
+          <button key={c} className="pill" style={{ background: filter === c ? S.accent : "transparent", borderColor: filter === c ? S.accent : S.border, color: filter === c ? "#fff" : S.text }} onClick={() => setFilter(c)}>{c}</button>
+        ))}
+      </div>
+      {loading ? <div style={{ textAlign: "center", color: "#888", padding: 60 }}>Loading mentors...</div> :
+        filtered.length === 0 ? <div style={{ textAlign: "center", color: "#888", padding: 60 }}>No mentors found</div> :
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 20 }}>
+          {filtered.map((m, i) => <MentorCard key={m._id} mentor={m} onClick={setSelected} delay={i * 0.05} />)}
+        </div>}
+      {selected && <MentorModal mentor={selected} onClose={() => setSelected(null)} onBook={(m, slot) => { setSelected(null); onBook(m, slot); }} />}
+    </div>
+  );
+}
+
+function MentorModal({ mentor, onClose, onBook }) {
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const slotsByDay = {};
+  (mentor.slots || []).forEach(s => { if (!slotsByDay[s.day]) slotsByDay[s.day] = []; slotsByDay[s.day].push(s); });
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "#888" }}><X /></button>
+        <div style={{ display: "flex", gap: 20, marginBottom: 24 }}>
+          <img src={mentor.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(mentor.name)}&background=1C1C1C&color=E93800&size=120`}
+            alt={mentor.name} style={{ width: 90, height: 90, borderRadius: "50%", objectFit: "cover", border: `2px solid ${S.accent}` }} />
+          <div>
+            <h2 className="serif" style={{ fontSize: 24, fontWeight: 700 }}>{mentor.name}</h2>
+            <div style={{ color: S.accent, marginBottom: 4 }}>{mentor.college}</div>
+            <div style={{ color: "#888", fontSize: 13 }}>{mentor.course} · Year {mentor.year}</div>
+            <div style={{ marginTop: 6 }}><Stars rating={mentor.rating || 5} /><span style={{ color: "#888", fontSize: 12, marginLeft: 4 }}>({mentor.sessions || 0} sessions)</span></div>
+          </div>
+        </div>
+        <p style={{ color: "#ccc", lineHeight: 1.7, marginBottom: 24, fontSize: 14 }}>{mentor.bio}</p>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontWeight: 600, marginBottom: 12 }}>Available Slots</div>
+          {Object.keys(slotsByDay).length === 0 ? <div style={{ color: "#888", fontSize: 14 }}>No slots available currently</div> :
+            Object.entries(slotsByDay).map(([day, slots]) => (
+              <div key={day} style={{ marginBottom: 16 }}>
+                <div style={{ color: "#888", fontSize: 12, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>{day}</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {slots.map((s, i) => (
+                    <button key={i} className={`pill ${s.status === "booked" ? "booked" : ""} ${selectedSlot === s.display ? "selected" : ""}`}
+                      onClick={() => s.status !== "booked" && setSelectedSlot(s.display)} disabled={s.status === "booked"}>
+                      {formatTime(s.time)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontWeight: 700, fontSize: 20, color: S.accent }}>₹{mentor.price || 250}<span style={{ color: "#888", fontWeight: 400, fontSize: 13 }}>/30 min</span></div>
+          <button className="btn-primary" disabled={!selectedSlot} onClick={() => selectedSlot && onBook(mentor, selectedSlot)} style={{ opacity: selectedSlot ? 1 : 0.4 }}>Book Session</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BookingFlow({ mentor, slot, onDone }) {
+  const [step, setStep] = useState("form");
+  const [form, setForm] = useState({ name: "", email: "", phone: "", code: "", message: "" });
+  const [codeError, setCodeError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      await apiFetch("/bookings", { method: "POST", body: { mentorId: mentor._id, mentorName: mentor.name, slot, studentName: form.name, studentEmail: form.email, studentPhone: form.phone, referralCode: form.code, message: form.message } });
+      const txt = `New Proxima Booking!\nStudent: ${form.name}\nPhone: ${form.phone}\nEmail: ${form.email}\nMentor: ${mentor.name}\nSlot: ${slot}\nMessage: ${form.message}`;
+      wa(ADMIN_WHATSAPP, txt);
+      if (mentor.whatsapp) wa(mentor.whatsapp, `Hi ${mentor.name}, you have a new booking!\nStudent: ${form.name}\nPhone: ${form.phone}\nSlot: ${slot}\nMessage: ${form.message}`);
+      setStep("done");
+    } catch (e) {
+      if (e.message.includes("code")) setCodeError("Code not recognised — you can leave this blank");
+    } finally { setLoading(false); }
+  };
+
+  if (step === "done") return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div className="fade-up" style={{ textAlign: "center", maxWidth: 440 }}>
+        <div style={{ width: 80, height: 80, borderRadius: "50%", background: "rgba(0,0,175,0.15)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}><Check /></div>
+        <h2 className="serif" style={{ fontSize: 32, marginBottom: 12 }}>Booking Confirmed!</h2>
+        <p style={{ color: "#888", lineHeight: 1.7, marginBottom: 24 }}>Your session with <strong style={{ color: S.text }}>{mentor.name}</strong> has been booked for <strong style={{ color: S.accent }}>{slot}</strong>.</p>
+        <button className="btn-primary" onClick={onDone}>Browse More Mentors</button>
+      </div>
+    </div>
+  );
+
+  if (step === "confirm") return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div className="modal slide-in" style={{ maxWidth: 500 }}>
+        <h2 className="serif" style={{ fontSize: 24, marginBottom: 20 }}>Confirm Your Booking</h2>
+        {[["Mentor", mentor.name], ["Slot", slot], ["Your Name", form.name], ["Email", form.email], ["Phone", form.phone], ["Message", form.message]].map(([k, v]) => v && (
+          <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${S.border}`, fontSize: 14 }}>
+            <span style={{ color: "#888" }}>{k}</span><span style={{ maxWidth: "60%", textAlign: "right" }}>{v}</span>
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+          <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setStep("form")}>Go Back</button>
+          <button className="btn-primary" style={{ flex: 1 }} onClick={handleConfirm} disabled={loading}>{loading ? "Booking..." : "Confirm Booking"}</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div className="modal slide-in" style={{ maxWidth: 500 }}>
+        <button onClick={onDone} style={{ background: "none", border: "none", color: "#888", display: "flex", alignItems: "center", gap: 6, marginBottom: 20 }}><ArrowLeft />Back</button>
+        <h2 className="serif" style={{ fontSize: 24, marginBottom: 4 }}>Book with {mentor.name}</h2>
+        <p style={{ color: S.accent, marginBottom: 24, fontSize: 14 }}>{slot}</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <input placeholder="Your full name *" value={form.name} onChange={e => upd("name", e.target.value)} />
+          <input placeholder="Email address *" type="email" value={form.email} onChange={e => upd("email", e.target.value)} />
+          <input placeholder="Phone number *" type="tel" value={form.phone} onChange={e => upd("phone", e.target.value)} />
+          <div>
+            <input placeholder="Mentor referral code (optional)" value={form.code} onChange={e => { upd("code", e.target.value); setCodeError(""); }} />
+            {codeError && <div style={{ color: S.accent, fontSize: 12, marginTop: 4 }}><AlertCircle /> {codeError}</div>}
+          </div>
+          <textarea placeholder="Short message to your mentor *" rows={3} value={form.message} onChange={e => upd("message", e.target.value)} />
+        </div>
+        <button className="btn-primary" style={{ width: "100%", marginTop: 20 }} onClick={() => setStep("confirm")} disabled={!form.name || !form.email || !form.phone || !form.message}>Review Booking →</button>
+      </div>
+    </div>
+  );
+}
+
+function MentorRegistration({ onDone }) {
+  const TOTAL = 6;
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState({ name: "", college: "", course: "", year: "", email: "", whatsapp: "", bio: "", photo: "" });
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handlePhoto = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try { const url = await uploadToCloudinary(file); upd("photo", url); setPreview(url); }
+    catch { alert("Upload failed. Try again."); } finally { setUploading(false); }
+  };
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      await apiFetch("/registrations", { method: "POST", body: form });
+      wa(ADMIN_WHATSAPP, `New Mentor Application!\nName: ${form.name}\nCollege: ${form.college}\nCourse: ${form.course}\nEmail: ${form.email}\nPhone: ${form.whatsapp}`);
+      setStep(TOTAL);
+    } catch { alert("Submission failed. Try again."); } finally { setSubmitting(false); }
+  };
+
+  const steps = [
+    { label: "Name", content: <div><h2 className="serif" style={{ fontSize: 28, marginBottom: 8 }}>What's your full name?</h2><p style={{ color: "#888", marginBottom: 24 }}>This will appear on your public profile</p><input placeholder="Your full name" value={form.name} onChange={e => upd("name", e.target.value)} autoFocus /></div>, valid: form.name.trim() },
+    { label: "College", content: <div><h2 className="serif" style={{ fontSize: 28, marginBottom: 8 }}>Your college details</h2><p style={{ color: "#888", marginBottom: 24 }}>Tell us where you study</p><div style={{ display: "flex", flexDirection: "column", gap: 14 }}><input placeholder="College name (e.g. SRCC)" value={form.college} onChange={e => upd("college", e.target.value)} /><input placeholder="Course / Programme" value={form.course} onChange={e => upd("course", e.target.value)} /><select value={form.year} onChange={e => upd("year", e.target.value)}><option value="">Select year</option><option value="1st">1st Year</option><option value="2nd">2nd Year</option><option value="3rd">3rd Year</option></select></div></div>, valid: form.college && form.course && form.year },
+    { label: "Contact", content: <div><h2 className="serif" style={{ fontSize: 28, marginBottom: 8 }}>Contact details</h2><p style={{ color: "#888", marginBottom: 24 }}>Not shown publicly</p><div style={{ display: "flex", flexDirection: "column", gap: 14 }}><input placeholder="Email address" type="email" value={form.email} onChange={e => upd("email", e.target.value)} /><input placeholder="WhatsApp number" type="tel" value={form.whatsapp} onChange={e => upd("whatsapp", e.target.value)} /></div></div>, valid: form.email && form.whatsapp },
+    { label: "Bio", content: <div><h2 className="serif" style={{ fontSize: 28, marginBottom: 8 }}>Tell students about yourself</h2><p style={{ color: "#888", marginBottom: 24 }}>Max 200 characters</p><textarea placeholder="e.g. 2nd year BCom Hons at SRCC. Happy to talk about college life..." rows={4} maxLength={200} value={form.bio} onChange={e => upd("bio", e.target.value)} /><div style={{ color: "#888", fontSize: 12, marginTop: 6, textAlign: "right" }}>{form.bio.length}/200</div></div>, valid: form.bio.trim().length >= 20 },
+    { label: "Photo", content: <div><h2 className="serif" style={{ fontSize: 28, marginBottom: 8 }}>Add a profile photo</h2><p style={{ color: "#888", marginBottom: 24 }}>Clear, well-lit, face visible.</p>{preview ? <div style={{ textAlign: "center", marginBottom: 20 }}><img src={preview} alt="preview" style={{ width: 100, height: 100, borderRadius: "50%", objectFit: "cover", border: `3px solid ${S.accent}` }} /><div style={{ color: "#888", fontSize: 13, marginTop: 8 }}>Photo uploaded ✓</div></div> : null}<label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "14px 20px", border: `2px dashed ${S.border}`, borderRadius: 10, cursor: "pointer", color: "#888" }}><Upload />{uploading ? "Uploading..." : "Click to upload photo"}<input type="file" accept="image/*" onChange={handlePhoto} style={{ display: "none" }} /></label></div>, valid: true },
+  ];
+
+  if (step === TOTAL) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div className="fade-up" style={{ textAlign: "center", maxWidth: 440 }}>
+        <div style={{ fontSize: 60, marginBottom: 24 }}>🎉</div>
+        <h2 className="serif" style={{ fontSize: 32, marginBottom: 12 }}>Thanks {form.name}!</h2>
+        <p style={{ color: "#888", lineHeight: 1.7, marginBottom: 24 }}>We'll review your profile and get back to you within 24 hours.</p>
+        <button className="btn-primary" onClick={onDone}>Back to Home</button>
+      </div>
+    </div>
+  );
+
+  const current = steps[step - 1];
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ width: "100%", maxWidth: 520 }}>
+        <div className="progress-bar" style={{ marginBottom: 32 }}>
+          <div className="progress-fill" style={{ width: `${((step - 1) / (TOTAL - 1)) * 100}%` }} />
+        </div>
+        <div style={{ color: "#888", fontSize: 13, marginBottom: 24 }}>Step {step} of {TOTAL - 1}</div>
+        <div className="slide-in" key={step}>{current.content}</div>
+        <div style={{ display: "flex", gap: 12, marginTop: 32 }}>
+          {step > 1 && <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setStep(s => s - 1)}>← Back</button>}
+          {step < TOTAL - 1 && <button className="btn-primary" style={{ flex: 1 }} disabled={!current.valid} onClick={() => setStep(s => s + 1)}>Continue →</button>}
+          {step === TOTAL - 1 && <button className="btn-primary" style={{ flex: 1 }} onClick={handleSubmit} disabled={submitting}>{submitting ? "Submitting..." : "Submit Application"}</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MentorLogin({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [pin, setPin] = useState("");
+  const [err, setErr] = useState("");
+  const handle = async () => {
+    try { const data = await apiFetch("/mentor/login", { method: "POST", body: { email, pin } }); onLogin(data); }
+    catch { setErr("Invalid email or PIN"); }
+  };
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div className="modal fade-up" style={{ maxWidth: 400 }}>
+        <h2 className="serif" style={{ fontSize: 28, marginBottom: 24 }}>Mentor Login</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <input placeholder="Registered email" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+          <input placeholder="4-digit PIN" type="password" maxLength={4} value={pin} onChange={e => setPin(e.target.value)} />
+          {err && <div style={{ color: S.accent, fontSize: 13 }}>{err}</div>}
+          <button className="btn-primary" onClick={handle}>Login →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SlotManager({ mentor, onSave, bookedSlots = [] })  {
+  const [days, setDays] = useState({});
+  const times = generateTimeSlots();
+  const toggleDay = (day) => setDays(d => d[day] ? (({ [day]: _, ...rest }) => rest)(d) : { ...d, [day]: [{ from: "09:00", to: "11:00" }] });
+  const addRange = (day) => setDays(d => ({ ...d, [day]: [...d[day], { from: "14:00", to: "16:00" }] }));
+  const removeRange = (day, i) => setDays(d => { const ranges = d[day].filter((_, idx) => idx !== i); return ranges.length ? { ...d, [day]: ranges } : (({ [day]: _, ...rest }) => rest)(d); });
+  const updateRange = (day, i, k, v) => setDays(d => { const ranges = [...d[day]]; ranges[i] = { ...ranges[i], [k]: v }; return { ...d, [day]: ranges }; });
+  const allSlots = Object.entries(days).flatMap(([day, ranges]) => generateSlotsFromRanges(ranges.map(r => ({ ...r, day }))));
+
+  const handleSave = async () => {
+    try { await apiFetch(`/mentors/${mentor._id}/slots`, { method: "PUT", body: { slots: allSlots } }); alert("Your slots have been updated!"); onSave(); }
+    catch { alert("Failed to save slots"); }
+  };
+
+  return (
+    <div>
+      <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 20 }}>Manage Your Slots</div>
+      {DAYS.map(day => (
+        <div key={day} style={{ marginBottom: 16, background: "#222", border: `1px solid ${S.border}`, borderRadius: 12, padding: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: days[day] ? 16 : 0 }}>
+            <span style={{ fontWeight: 500 }}>{day}</span>
+            <button onClick={() => toggleDay(day)} style={{ background: days[day] ? S.accent : "transparent", border: `1px solid ${days[day] ? S.accent : S.border}`, color: days[day] ? "#fff" : "#888", padding: "4px 14px", borderRadius: 20, fontSize: 13 }}>{days[day] ? "Active" : "Off"}</button>
+          </div>
+          {days[day] && days[day].map((range, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+              <select value={range.from} onChange={e => updateRange(day, i, "from", e.target.value)} style={{ flex: 1 }}>disabled={bookedSlots.some(bs => bs.includes(day))}{times.map(t => <option key={t} value={t}>{formatTime(t)}</option>)}</select>
+              <span style={{ color: "#ccc" }}>to</span>
+              <select value={range.to} onChange={e => updateRange(day, i, "to", e.target.value)} style={{ flex: 1 }}>disabled={bookedSlots.some(bs => bs.includes(day))}{times.map(t => <option key={t} value={t}>{formatTime(t)}</option>)}</select>
+              <button onClick={() => removeRange(day, i)} style={{ background: "none", border: "none", color: "#888" }}><X /></button>
+            </div>
+          ))}
+          {days[day] && (
+            <div>
+              <div style={{ color: "#bbb", fontSize: 12, marginBottom: 8 }}>{generateSlotsFromRanges(days[day].map(r => ({ ...r, day }))).length} slots: {generateSlotsFromRanges(days[day].map(r => ({ ...r, day }))).map(s => formatTime(s.time)).join(", ")}</div>
+              <button onClick={() => addRange(day)} style={{ background: "none", border: `1px dashed ${S.border}`, color: "#888", padding: "6px 14px", borderRadius: 8, fontSize: 13, width: "100%" }}>+ Add another range</button>
+            </div>
+          )}
+        </div>
+      ))}
+      {allSlots.length > 0 && (
+        <div style={{ background: "rgba(0,0,175,0.1)", border: `1px solid ${S.blue}`, borderRadius: 10, padding: 16, marginBottom: 20 }}>
+          <div style={{ fontWeight: 500, marginBottom: 8, color: S.blue }}>Preview — {allSlots.length} total slots</div>
+{DAYS.filter(d => days[d]).map(d => <div key={d} style={{ fontSize: 13, color: "#ccc", marginBottom: 4 }}>
+  <strong>{d}:</strong> {generateSlotsFromRanges(days[d].map(r => ({ ...r, day: d }))).map(s => {
+    const isBooked = bookedSlots.some(bs => bs.includes(s.time) && bs.includes(d));
+    return <span key={s.time} style={{ marginRight: 6, color: isBooked ? S.accent : "#ccc" }}>{formatTime(s.time)}{isBooked ? " 🔒" : ""}</span>;
+  })}
+</div>)}
+        </div>
+      )}
+      <button className="btn-primary" onClick={handleSave} style={{ width: "100%" }}>Save Slots</button>
+    </div>
+  );
+}
+
+function MentorDashboard({ mentor, onLogout }) {
+  const [tab, setTab] = useState("bookings");
+  const [bookings, setBookings] = useState([]);
+  const [editingBio, setEditingBio] = useState(false);
+  const [bio, setBio] = useState(mentor.bio || "");
+  const [savingBio, setSavingBio] = useState(false);
+
+  useEffect(() => {
+    apiFetch(`/bookings?mentorId=${mentor._id}`).then(setBookings).catch(() => {});
+  }, [mentor._id]);
+
+  const saveBio = async () => {
+    setSavingBio(true);
+    try {
+      await apiFetch(`/mentors/${mentor._id}`, { method: "PUT", body: { ...mentor, bio } });
+      setEditingBio(false);
+      alert("Bio updated!");
+    } catch { alert("Failed to update bio"); } finally { setSavingBio(false); }
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: #0f0f0f, fontFamily: "'DM Sans', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&display=swap');
+        .dash-card { background: ${S.card}; border: 1px solid #252525; border-radius: 16px; padding: 24px; margin-bottom: 16px; transition: border 0.2s; }
+        .dash-card:hover { border-color: #3A3A3A; }
+        .dash-tab { padding: 10px 24px; border: none; background: transparent; color: #888; font-size: 14px; font-family: 'DM Sans', sans-serif; border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.2s; }
+        .dash-tab.active { color: ${S.accent}; border-bottom-color: ${S.accent}; }
+        .booking-card { background: linear-gradient(135deg, #1C1C1C 0%, #222 100%); border: 1px solid ${S.border}; border-radius: 16px; padding: 24px; margin-bottom: 14px; transition: all 0.3s; }
+        .booking-card:hover { border-color: ${S.accent}; transform: translateY(-2px); box-shadow: 0 8px 32px rgba(233,56,0,0.08); }
+      `}</style>
+
+      {/* Header */}
+      <div style={{ background: S.card, borderBottom: `1px solid ${S.border}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+<img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style={{ height: 40, objectFit: "contain" }} />        <button onClick={onLogout} style={{ background: "none", border: `1px solid ${S.border}`, color: "#888", padding: "8px 18px", borderRadius: 8, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+          <LogOut /> Sign out
+        </button>
+      </div>
+
+      <div style={{ maxWidth: 860, margin: "0 auto", padding: "40px 20px" }}>
+
+        {/* Profile Card */}
+        <div style={{ background: `linear-gradient(135deg, ${S.card} 0%, #222 100%)`, border: `border: `1px solid #252525`, borderRadius: 20, padding: 32, marginBottom: 32, position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: -40, right: -40, width: 160, height: 160, borderRadius: "50%", background: `radial-gradient(circle, rgba(233,56,0,0.08) 0%, transparent 70%)` }} />
+          <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ position: "relative" }}>
+              <img
+                src={mentor.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(mentor.name)}&background=1C1C1C&color=E93800&size=120`}
+                alt={mentor.name}
+                style={{ width: 90, height: 90, borderRadius: "50%", objectFit: "cover", border: `3px solid ${S.accent}`, display: "block" }}
+              />
+              <div style={{ position: "absolute", bottom: 2, right: 2, width: 16, height: 16, borderRadius: "50%", background: "#22C55E", border: `2px solid ${S.card}` }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, fontWeight: 700, color: S.text, marginBottom: 4 }}>{mentor.name}</div>
+              <div style={{ color: S.accent, fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{mentor.college}</div>
+              <div style={{ color: "#888", fontSize: 13, marginBottom: 16 }}>{mentor.course} · {mentor.year} Year</div>
+              {editingBio ? (
+                <div>
+                  <textarea
+                    value={bio}
+                    onChange={e => setBio(e.target.value)}
+                    maxLength={200}
+                    rows={3}
+                    style={{ background: "#2A2A2A", border: `1px solid ${S.accent}`, color: S.text, borderRadius: 8, padding: "10px 14px", width: "100%", fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: "none", resize: "none" }}
+                  />
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button onClick={saveBio} disabled={savingBio} style={{ background: S.accent, color: "#fff", border: "none", padding: "7px 18px", borderRadius: 7, fontSize: 13, cursor: "pointer" }}>{savingBio ? "Saving..." : "Save Bio"}</button>
+                    <button onClick={() => setEditingBio(false)} style={{ background: "transparent", color: "#888", border: `1px solid ${S.border}`, padding: "7px 18px", borderRadius: 7, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <p style={{ color: "#aaa", fontSize: 13, lineHeight: 1.7, flex: 1 }}>{bio || "No bio added yet."}</p>
+                  <button onClick={() => setEditingBio(true)} style={{ background: "none", border: `1px solid ${S.border}`, color: "#888", padding: "5px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>✏ Edit Bio</button>
+                </div>
+              )}
+            </div>
+            <div style={{ textAlign: "center", background: "rgba(233,56,0,0.08)", border: `1px solid rgba(233,56,0,0.2)`, borderRadius: 14, padding: "16px 24px" }}>
+              <div style={{ fontSize: 40, fontWeight: 700, color: S.accent, fontFamily: "'Playfair Display', serif" }}>{mentor.credits || 0}</div>
+              <div style={{ color: "#888", fontSize: 12, marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>Credits</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Row */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 14, marginBottom: 32 }}>
+          {[
+            ["Sessions", mentor.sessions || 0, "📞"],
+            ["Bookings", bookings.length, "📅"],
+            ["Rating", `${mentor.rating || 5}⭐`, ""],
+            ["Price", `₹${mentor.price || 250}`, "💰"],
+          ].map(([l, v, icon]) => (
+            <div key={l} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 12, padding: "16px 20px", textAlign: "center" }}>
+              <div style={{ fontSize: 22, marginBottom: 4 }}>{icon}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: S.text }}>{v}</div>
+              <div style={{ color: "#888", fontSize: 12, marginTop: 2 }}>{l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div style={{ borderBottom: `1px solid ${S.border}`, display: "flex", marginBottom: 28 }}>
+          {["bookings", "slots"].map(t => (
+            <button key={t} className={`dash-tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)} style={{ textTransform: "capitalize", fontFamily: "'DM Sans', sans-serif" }}>{t === "bookings" ? `Bookings (${bookings.length})` : "Manage Slots"}</button>
+          ))}
+        </div>
+
+        {/* Bookings */}
+        {tab === "bookings" && (
+          <div>
+            {bookings.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "60px 20px", color: "#555" }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
+                <div style={{ fontSize: 16, color: "#888" }}>No bookings yet</div>
+                <div style={{ fontSize: 13, color: "#555", marginTop: 8 }}>Students will appear here once they book a session with you</div>
+              </div>
+            ) : bookings.map(b => (
+              <div key={b._id} className="booking-card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 16, color: S.text }}>{b.studentName}</div>
+                    <div style={{ color: S.accent, fontSize: 13, marginTop: 2 }}>📅 {b.slot}</div>
+                  </div>
+                  <div style={{ background: "rgba(233,56,0,0.1)", border: `1px solid rgba(233,56,0,0.2)`, color: S.accent, padding: "4px 12px", borderRadius: 20, fontSize: 12 }}>Confirmed</div>
+                </div>
+                <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                  <div style={{ color: "#aaa", fontSize: 13 }}>📞 {b.studentPhone}</div>
+                </div>
+                {b.message && (
+                  <div style={{ marginTop: 12, background: "#222", border: `1px solid ${S.border}`, borderRadius: 8, padding: "10px 14px", color: "#ccc", fontSize: 13, lineHeight: 1.6 }}>
+                    💬 {b.message}
+                  </div>
+                )}
+                <div style={{ marginTop: 12 }}>
+                  {b.meetLink ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(0,0,175,0.08)", border: `1px solid rgba(0,0,175,0.2)`, borderRadius: 8, padding: "10px 14px" }}>
+                      <span style={{ fontSize: 13, color: "#aaa", flex: 1 }}>🎥 Meet link submitted — admin will forward to student</span>
+                      <a href={b.meetLink} target="_blank" rel="noreferrer" style={{ color: S.blue, fontSize: 12, textDecoration: "underline" }}>Open</a>
+                    </div>
+                  ) : (
+                    <MeetLinkSubmit bookingId={b._id} onSubmitted={() => window.location.reload()} />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === "slots" && <SlotManager mentor={mentor} bookedSlots={bookings.map(b => b.slot)} onSave={() => {}} />}
+      </div>
+    </div>
+  );
+}
+
+function MeetLinkSubmit({ bookingId, onSubmitted }) {
+  const [link, setLink] = useState("");
+  const [saving, setSaving] = useState(false);
+  const submit = async () => {
+    if (!link.trim()) return;
+    setSaving(true);
+    await apiFetch(`/bookings/${bookingId}/meetlink`, { method: "PUT", body: { meetLink: link.trim(), meetSent: false } });
+    setSaving(false);
+    onSubmitted();
+  };
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <input
+        placeholder="Paste your Google Meet link here"
+        value={link}
+        onChange={e => setLink(e.target.value)}
+        style={{ flex: 1, minWidth: 200, background: "#2A2A2A", border: `1px solid ${S.border}`, color: S.text, borderRadius: 8, padding: "8px 14px", fontSize: 13, outline: "none", fontFamily: "'DM Sans', sans-serif" }}
+      />
+      <button onClick={submit} disabled={saving} style={{ background: S.accent, color: "#fff", border: "none", padding: "8px 18px", borderRadius: 8, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
+        {saving ? "Submitting..." : "Submit to Admin"}
+      </button>
+    </div>
+  );
+}
+
+function AdminLogin({ onLogin }) {
+  const [pw, setPw] = useState(""); const [err, setErr] = useState("");
+  const handle = () => { if (pw === ADMIN_PASSWORD) onLogin(); else setErr("Incorrect password"); };
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div className="modal fade-up" style={{ maxWidth: 360 }}>
+        <h2 className="serif" style={{ fontSize: 24, marginBottom: 20 }}>Admin Access</h2>
+        <input type="password" placeholder="Password" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === "Enter" && handle()} />
+        {err && <div style={{ color: S.accent, fontSize: 13, marginTop: 8 }}>{err}</div>}
+        <button className="btn-primary" style={{ width: "100%", marginTop: 14 }} onClick={handle}>Login</button>
+      </div>
+    </div>
+  );
+}
+
+function MentorForm({ data, onChange, onSave, onCancel }) {
+  const refs = {
+    name: useRef(null), college: useRef(null), course: useRef(null),
+    email: useRef(null), whatsapp: useRef(null), referralCode: useRef(null),
+    pin: useRef(null), bio: useRef(null), photo: useRef(null),
+    price: useRef(null), rating: useRef(null), sessions: useRef(null), year: useRef(null),
+  };
+
+  const handleSave = () => {
+    const updated = {};
+    Object.entries(refs).forEach(([k, ref]) => {
+      if (ref.current) updated[k] = ref.current.value;
+    });
+    updated.price = Number(updated.price || data.price || 250);
+    updated.rating = Number(updated.rating || data.rating || 5);
+    updated.sessions = Number(updated.sessions || data.sessions || 0);
+    Object.entries(updated).forEach(([k, v]) => onChange(k, v));
+    onSave();
+  };
+
+  const inp = { background: "#222", border: "1px solid #2A2A2A", color: "#fff", borderRadius: 8, padding: "12px 16px", width: "100%", fontFamily: "DM Sans, sans-serif", fontSize: 14, outline: "none" };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth: 560 }}>
+        <h3 className="serif" style={{ fontSize: 22, marginBottom: 20 }}>{data._id ? "Edit Mentor" : "Add Mentor"}</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <input ref={refs.name} placeholder="Name" defaultValue={data.name || ""} style={inp} />
+          <input ref={refs.college} placeholder="College" defaultValue={data.college || ""} style={inp} />
+          <input ref={refs.course} placeholder="Course" defaultValue={data.course || ""} style={inp} />
+          <input ref={refs.email} placeholder="Email" defaultValue={data.email || ""} style={inp} />
+          <input ref={refs.whatsapp} placeholder="WhatsApp" defaultValue={data.whatsapp || ""} style={inp} />
+          <input ref={refs.referralCode} placeholder="Referral Code" defaultValue={data.referralCode || ""} style={inp} />
+          <input ref={refs.pin} placeholder="PIN (4 digits)" defaultValue={data.pin || "0000"} style={inp} />
+          <select ref={refs.year} defaultValue={data.year || "1st"} style={inp}>
+            <option value="1st">1st Year</option><option value="2nd">2nd Year</option><option value="3rd">3rd Year</option>
+          </select>
+          <input ref={refs.price} type="number" placeholder="Price (₹)" defaultValue={data.price || 250} style={inp} />
+          <input ref={refs.rating} type="number" placeholder="Rating" step="0.1" min="1" max="5" defaultValue={data.rating || 5} style={inp} />
+          <input ref={refs.sessions} type="number" placeholder="Sessions done" defaultValue={data.sessions || 0} style={inp} />
+        </div>
+        <textarea ref={refs.bio} placeholder="Bio (max 200 chars)" maxLength={200} rows={3} defaultValue={data.bio || ""} style={{ ...inp, marginTop: 12 }} />
+        <div style={{ marginTop: 12 }}>
+          {data.photo && <img src={data.photo} alt="" style={{ width: 60, height: 60, borderRadius: "50%", objectFit: "cover", marginBottom: 8 }} />}
+          <input ref={refs.photo} placeholder="Paste image URL" defaultValue={data.photo || ""} style={{ ...inp, marginTop: 4 }} />
+        </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+          <button className="btn-secondary" style={{ flex: 1 }} onClick={onCancel}>Cancel</button>
+          <button className="btn-primary" style={{ flex: 1 }} onClick={handleSave}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminPanel({ onLogout }) {
+  const [tab, setTab] = useState("stats");
+  const [mentors, setMentors] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [regs, setRegs] = useState([]);
+  const [stats, setStats] = useState({});
+  const [editMentor, setEditMentor] = useState(null);
+  const [showAddMentor, setShowAddMentor] = useState(false);
+  const [notes, setNotes] = useState({});
+  const [sentMeet, setSentMeet] = useState({});
+
+  const newMentorData = useRef({ name: "", college: "", course: "", year: "1st", bio: "", photo: "", email: "", whatsapp: "", price: 250, rating: 5, sessions: 0, referralCode: "", pin: "0000" });
+  const editMentorData = useRef({});
+
+  const load = useCallback(async () => {
+    const [m, b, r, s] = await Promise.all([
+      apiFetch("/mentors?all=true").catch(() => []),
+      apiFetch("/bookings").catch(() => []),
+      apiFetch("/registrations").catch(() => []),
+      apiFetch("/stats").catch(() => ({})),
+    ]);
+    setMentors(m); setBookings(b); setRegs(r); setStats(s);
+    const n = {}; b.forEach(bk => { if (bk.notes) n[bk._id] = bk.notes; });
+    setNotes(n);
+    const sm = {};
+    b.forEach(bk => { if (bk.meetSent) sm[bk._id] = true; });
+    setSentMeet(sm);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleNewMentorChange = useCallback((k, v) => { newMentorData.current[k] = v; }, []);
+  const handleEditMentorChange = useCallback((k, v) => { editMentorData.current[k] = v; }, []);
+
+  const toggleVisibility = async (m) => { await apiFetch(`/mentors/${m._id}`, { method: "PUT", body: { ...m, visible: !m.visible } }); load(); };
+  const deleteMentor = async (id) => { if (window.confirm("Delete mentor?")) { await apiFetch(`/mentors/${id}`, { method: "DELETE" }); load(); } };
+  const saveNote = async (id) => { await apiFetch(`/bookings/${id}/notes`, { method: "PUT", body: { notes: notes[id] } }); };
+  const sendMeet = (b) => {
+    const link = b.meetLink; if (!link) return;
+    wa(b.studentPhone, `Hi ${b.studentName}, your Proxima session with ${b.mentorName} is confirmed!\nSlot: ${b.slot}\nMeet Link: ${link}`);
+    const mentor = mentors.find(m => m._id === b.mentorId || m.name === b.mentorName);
+    if (mentor?.whatsapp) wa(mentor.whatsapp, `Hi ${mentor.name}, session with ${b.studentName}.\nSlot: ${b.slot}\nMeet Link: ${link}`);
+    apiFetch(`/bookings/${b._id}/meetlink`, { method: "PUT", body: { meetLink: link, meetSent: true } });
+    setSentMeet(s => ({ ...s, [b._id]: true }));
+  };
+  const approveReg = async (r) => { await apiFetch(`/registrations/${r._id}/approve`, { method: "PUT" }); load(); };
+  const deleteBooking = async (id) => {
+  if (window.confirm("Delete this booking?")) {
+    await apiFetch(`/bookings/${id}`, { method: "DELETE" });
+    load();
+  }
+};
+  const rejectReg = async (id) => { await apiFetch(`/registrations/${id}`, { method: "DELETE" }); load(); };
+  const addMentor = async () => {
+    await apiFetch("/mentors", { method: "POST", body: { ...newMentorData.current, visible: true } });
+    setShowAddMentor(false);
+    newMentorData.current = { name: "", college: "", course: "", year: "1st", bio: "", photo: "", email: "", whatsapp: "", price: 250, rating: 5, sessions: 0, referralCode: "", pin: "0000" };
+    load();
+  };
+  const saveMentor = async () => {
+    await apiFetch(`/mentors/${editMentor._id}`, { method: "PUT", body: { ...editMentor, ...editMentorData.current } });
+    setEditMentor(null); load();
+  };
+
+  return (
+    <div className="admin-panel">
+      <div style={{ borderBottom: `1px solid ${S.border}`, padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style={{ height: 40, objectFit: "contain" }} />
+        <button onClick={onLogout} style={{ background: "none", border: "none", color: "#888" }}><LogOut /> Logout</button>
+      </div>
+      <div style={{ borderBottom: `1px solid ${S.border}`, display: "flex", paddingLeft: 24 }}>
+        {["stats","mentors","registrations","bookings"].map(t => (
+          <button key={t} className={`admin-tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)} style={{ textTransform: "capitalize" }}>
+            {t}{t === "registrations" && regs.length > 0 && <span className="badge-pending" style={{ marginLeft: 6 }}>{regs.length}</span>}
+          </button>
+        ))}
+      </div>
+      <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
+        {tab === "stats" && (
+          <div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
+              {[["Total Bookings", stats.totalBookings||0],["This Week", stats.weeklyBookings||0],["Active Mentors", stats.activeMentors||0],["Pending", stats.pendingRegistrations||0],["Credits Issued", stats.totalCredits||0]].map(([l,v]) => (
+                <div key={l} className="stat-card"><div style={{ color: "#888", fontSize: 13, marginBottom: 8 }}>{l}</div><div style={{ fontSize: 32, fontWeight: 700, color: S.accent }}>{v}</div></div>
+              ))}
+            </div>
+            <div style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 12, padding: 20 }}>
+              <div style={{ fontWeight: 600, marginBottom: 16 }}>Bookings per Mentor</div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                <thead><tr>{["Mentor","College","Bookings","Credits"].map(h => <th key={h} style={{ textAlign: "left", color: "#888", padding: "8px 0", borderBottom: `1px solid ${S.border}` }}>{h}</th>)}</tr></thead>
+                <tbody>{mentors.map(m => <tr key={m._id}><td style={{ padding: "10px 0" }}>{m.name}</td><td style={{ color: "#888" }}>{m.college}</td><td>{(stats.bookingsByMentor||{})[m._id]||0}</td><td style={{ color: S.accent }}>{m.credits||0}</td></tr>)}</tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        {tab === "mentors" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 600 }}>Mentors ({mentors.length})</h2>
+              <button className="btn-primary" onClick={() => setShowAddMentor(true)}>+ Add Mentor</button>
+            </div>
+            {mentors.map(m => (
+              <div key={m._id} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 12, padding: 16, marginBottom: 12, display: "flex", alignItems: "center", gap: 16 }}>
+                <img src={m.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}&background=1C1C1C&color=E93800&size=48`} alt={m.name} style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover" }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600 }}>{m.name}</div>
+                  <div style={{ color: "#888", fontSize: 13 }}>{m.college} · {m.course}</div>
+                  <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>Code: {m.referralCode||"—"} · Credits: {m.credits||0} · Sessions: {m.sessions||0}</div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => toggleVisibility(m)} style={{ background: "none", border: `1px solid ${S.border}`, color: m.visible?"#888":S.accent, padding: "6px 12px", borderRadius: 6 }}>{m.visible?<Eye />:<EyeOff />}</button>
+                  <button onClick={() => { editMentorData.current={...m}; setEditMentor(m); }} style={{ background: "none", border: `1px solid ${S.border}`, color: "#888", padding: "6px 12px", borderRadius: 6 }}><Edit2 /></button>
+                  <button onClick={() => deleteMentor(m._id)} style={{ background: "none", border: `1px solid ${S.border}`, color: S.accent, padding: "6px 12px", borderRadius: 6 }}><Trash2 /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {tab === "registrations" && (
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 20 }}>Pending Applications ({regs.length})</h2>
+            {regs.length === 0 ? <div style={{ color: "#888", textAlign: "center", padding: 40 }}>No pending applications</div> :
+              regs.map(r => (
+                <div key={r._id} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 12, padding: 20, marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 16 }}>{r.name}</div>
+                      <div style={{ color: S.accent, fontSize: 14 }}>{r.college} · {r.course} · {r.year}</div>
+                      <div style={{ color: "#888", fontSize: 13, marginTop: 4 }}>{r.email} · {r.whatsapp}</div>
+                      <div style={{ color: "#ccc", fontSize: 13, marginTop: 8 }}>{r.bio}</div>
+                    </div>
+                    {r.photo && <img src={r.photo} alt={r.name} style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover" }} />}
+                  </div>
+                  <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                    <button className="btn-blue" onClick={() => approveReg(r)}>Approve →</button>
+                    <button className="btn-secondary" style={{ padding: "8px 16px", fontSize: 13 }} onClick={() => rejectReg(r._id)}>Reject</button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+        {tab === "bookings" && (
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 20 }}>All Bookings ({bookings.length})</h2>
+            {bookings.length === 0 ? <div style={{ color: "#888", textAlign: "center", padding: 40 }}>No bookings yet</div> :
+              bookings.map(b => (
+                <div key={b._id} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 12, padding: 20, marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{b.studentName} → {b.mentorName}</div>
+                      <div style={{ color: S.accent, fontSize: 13 }}>{b.slot}</div>
+                      <div style={{ color: "#888", fontSize: 13, marginTop: 2 }}>📧 {b.studentEmail} · 📞 {b.studentPhone}</div>
+                      <div style={{ color: "#ccc", fontSize: 13, marginTop: 4 }}>{b.message}</div>
+                    </div>
+<div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+  <div style={{ color: "#666", fontSize: 12 }}>{new Date(b.createdAt).toLocaleDateString()}</div>
+  <button onClick={() => deleteBooking(b._id)} style={{ background: "none", border: `1px solid rgba(233,56,0,0.3)`, color: S.accent, padding: "4px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer" }}>🗑 Delete</button>
+</div>
+                  </div>
+                  <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <textarea placeholder="Private notes" rows={2} value={notes[b._id]||""} onChange={e => setNotes(n => ({...n,[b._id]:e.target.value}))} style={{ fontSize: 13 }} />
+                      <button onClick={() => saveNote(b._id)} style={{ background: "none", border: `1px solid ${S.border}`, color: "#888", padding: "4px 12px", borderRadius: 6, fontSize: 12, marginTop: 4 }}>Save Note</button>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 220 }}>
+                      {b.meetLink ? (
+                        <div style={{ background: "rgba(0,0,175,0.08)", border: `1px solid rgba(0,0,175,0.25)`, borderRadius: 8, padding: "10px 14px" }}>
+                          <div style={{ fontSize: 11, color: "#888", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>🎥 Meet link from mentor</div>
+                          <div style={{ fontSize: 12, color: "#ccc", wordBreak: "break-all", marginBottom: 10 }}>{b.meetLink}</div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <button onClick={() => sendMeet(b)} className="btn-blue" style={{ fontSize: 12, padding: "6px 14px" }}>
+                              {sentMeet[b._id] ? "✓ Sent to Student" : "Send to Student via WhatsApp"}
+                            </button>
+                            <a href={b.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#888", padding: "6px 10px", border: `1px solid ${S.border}`, borderRadius: 6, textDecoration: "none" }}>Test Link</a>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ background: "#1a1a1a", border: `1px dashed ${S.border}`, borderRadius: 8, padding: "12px 14px", color: "#555", fontSize: 13, textAlign: "center" }}>
+                          ⏳ Waiting for mentor to submit meet link
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+      {showAddMentor && <MentorForm data={newMentorData.current} onChange={handleNewMentorChange} onSave={addMentor} onCancel={() => setShowAddMentor(false)} />}
+      {editMentor && <MentorForm data={editMentor} onChange={handleEditMentorChange} onSave={saveMentor} onCancel={() => setEditMentor(null)} />}
+    </div>
+  );
+}
+
+export default function App() {
+  const [view, setView] = useState("landing");
+  const [bookData, setBookData] = useState(null);
+  const [adminLoggedIn, setAdminLoggedIn] = useState(false);
+  const [mentorSession, setMentorSession] = useState(() => { try { return JSON.parse(localStorage.getItem("proxima_mentor")||"null"); } catch { return null; } });
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash === "#admin") setView("admin");
+    if (hash === "#mentor-login") setView("mentor-login");
+  }, []);
+
+  const mentorLogin = (mentor) => { localStorage.setItem("proxima_mentor", JSON.stringify(mentor)); setMentorSession(mentor); setView("mentor-dashboard"); };
+  const mentorLogout = () => { localStorage.removeItem("proxima_mentor"); setMentorSession(null); setView("landing"); };
+
+  if (view === "admin") return adminLoggedIn ? <AdminPanel onLogout={() => { setAdminLoggedIn(false); setView("landing"); }} /> : <AdminLogin onLogin={() => setAdminLoggedIn(true)} />;
+  if (view === "mentor-login") return <MentorLogin onLogin={mentorLogin} />;
+  if (view === "mentor-dashboard" && mentorSession) return <MentorDashboard mentor={mentorSession} onLogout={mentorLogout} />;
+
+  return (
+    <>
+      <style>{css}</style>
+      {view === "landing" && <Landing onMentee={() => setView("discovery")} onMentor={() => setView("register")} />}
+      {view === "discovery" && <MentorDiscovery onBook={(m,s) => { setBookData({mentor:m,slot:s}); setView("booking"); }} />}
+      {view === "booking" && bookData && <BookingFlow mentor={bookData.mentor} slot={bookData.slot} onDone={() => { setBookData(null); setView("discovery"); }} />}
+      {view === "register" && <MentorRegistration onDone={() => setView("landing")} />}
+      <footer style={{ textAlign: "center", padding: "20px", borderTop: `1px solid ${S.border}`, color: "#555", fontSize: 12 }}>
+        © 2025 Proxima &nbsp;·&nbsp;
+        <a href="#mentor-login" onClick={() => setView("mentor-login")} style={{ color: "#555", textDecoration: "none" }}>Mentor Login</a>
+        &nbsp;·&nbsp;
+        <a href="#admin" onClick={() => setView("admin")} style={{ color: "#333", textDecoration: "none" }}>·</a>
+      </footer>
+    </>
+  );
+}
