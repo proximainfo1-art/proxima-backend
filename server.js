@@ -224,5 +224,12 @@ app.use("/api/payment", paymentRoutes);
 const { router: customCallsRouter } = require('./routes/customCalls');
 app.use('/api/custom-calls', customCallsRouter);
 
-app.listen(PORT, () => console.log(`Proxima server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Proxima server running on port ${PORT}`);
+  setInterval(() => {
+    fetch(`https://proxima-backend-hdho.onrender.com/api/mentors`)
+      .then(() => console.log("Self-ping to stay awake"))
+      .catch(() => {});
+  }, 14 * 60 * 1000);
+});
 
