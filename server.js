@@ -21,7 +21,7 @@ const SlotSchema = new mongoose.Schema({ day: String, time: String, display: Str
 const MentorSchema = new mongoose.Schema({
   name: String, college: String, course: String, year: String,
   bio: String, photo: String, email: String, whatsapp: String,
-  price: { type: Number, default: 250 }, rating: { type: Number, default: 5 },
+  price: { type: Number, default: 299 }, rating: { type: Number, default: 5 },
   sessions: { type: Number, default: 0 }, credits: { type: Number, default: 0 },
   referralCode: String, pin: { type: String, default: "0000" },
   visible: { type: Boolean, default: true },
