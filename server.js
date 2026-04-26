@@ -8,7 +8,6 @@ app.use(cors());
 app.use(express.json());
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const ADMIN_PASSWORD = "Kusu@Manku0430";
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/proxima";
 const PORT = process.env.PORT || 5000;
 
@@ -49,11 +48,17 @@ const Registration = mongoose.model("Registration", RegistrationSchema);
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 
-// Admin login
+// Admin login — password lives only in Render environment variables
 app.post("/api/admin/login", (req, res) => {
   const { password } = req.body;
-  if (password === ADMIN_PASSWORD) res.json({ success: true });
-  else res.status(401).json({ error: "Invalid password" });
+  if (!process.env.ADMIN_PASSWORD) {
+    return res.status(500).json({ error: "Server misconfigured: ADMIN_PASSWORD not set" });
+  }
+  if (password === process.env.ADMIN_PASSWORD) {
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ error: "Invalid password" });
+  }
 });
 
 // Mentor login
@@ -64,10 +69,16 @@ app.post("/api/mentor/login", async (req, res) => {
   res.json(mentor);
 });
 
-// GET mentors
+// GET mentors (admin — all fields)
 app.get("/api/mentors", async (req, res) => {
   const query = req.query.all === "true" ? {} : { visible: true };
   const mentors = await Mentor.find(query).sort({ createdAt: -1 });
+  res.json(mentors);
+});
+
+// GET mentors (public — sensitive fields stripped)
+app.get('/api/mentors/public', async (req, res) => {
+  const mentors = await Mentor.find({ visible: true }, '-pin -email -whatsapp');
   res.json(mentors);
 });
 
@@ -126,7 +137,6 @@ app.put("/api/mentors/:id/credits", async (req, res) => {
 app.post("/api/bookings", async (req, res) => {
   const { mentorId, slot, referralCode, ...rest } = req.body;
 
-  // Mark slot as booked
   const mentor = await Mentor.findById(mentorId);
   if (!mentor) return res.status(404).json({ error: "Mentor not found" });
 
@@ -134,7 +144,6 @@ app.post("/api/bookings", async (req, res) => {
   if (slotIdx !== -1) mentor.slots[slotIdx].status = "booked";
   await mentor.save();
 
-  // Handle referral code
   if (referralCode) {
     const refMentor = await Mentor.findOne({ referralCode: referralCode.toUpperCase() });
     if (!refMentor) return res.status(400).json({ error: "Invalid referral code" });
@@ -152,6 +161,12 @@ app.get("/api/bookings", async (req, res) => {
   res.json(bookings);
 });
 
+// DELETE booking
+app.delete("/api/bookings/:id", async (req, res) => {
+  await Booking.findByIdAndDelete(req.params.id);
+  res.json({ success: true });
+});
+
 // PUT booking notes
 app.put("/api/bookings/:id/notes", async (req, res) => {
   const booking = await Booking.findByIdAndUpdate(req.params.id, { notes: req.body.notes }, { new: true });
@@ -159,12 +174,12 @@ app.put("/api/bookings/:id/notes", async (req, res) => {
 });
 
 // PUT booking meet link
-app.delete("/api/bookings/:id", async (req, res) => {
-  await Booking.findByIdAndDelete(req.params.id);
-  res.json({ success: true });
-});
 app.put("/api/bookings/:id/meetlink", async (req, res) => {
-  const booking = await Booking.findByIdAndUpdate(req.params.id, { meetLink: req.body.meetLink, meetSent: req.body.meetSent }, { new: true });
+  const booking = await Booking.findByIdAndUpdate(
+    req.params.id,
+    { meetLink: req.body.meetLink, meetSent: req.body.meetSent },
+    { new: true }
+  );
   res.json(booking);
 });
 
@@ -184,7 +199,11 @@ app.get("/api/registrations", async (req, res) => {
 app.put("/api/registrations/:id/approve", async (req, res) => {
   const reg = await Registration.findById(req.params.id);
   if (!reg) return res.status(404).json({ error: "Not found" });
-  const mentor = await Mentor.create({ name: reg.name, college: reg.college, course: reg.course, year: reg.year, email: reg.email.toLowerCase().trim(), whatsapp: reg.whatsapp, bio: reg.bio, photo: reg.photo, visible: true, pin: "0000" });
+  const mentor = await Mentor.create({
+    name: reg.name, college: reg.college, course: reg.course, year: reg.year,
+    email: reg.email.toLowerCase().trim(), whatsapp: reg.whatsapp,
+    bio: reg.bio, photo: reg.photo, visible: true, pin: "0000",
+  });
   await Registration.findByIdAndUpdate(req.params.id, { status: "approved" });
   res.json(mentor);
 });
@@ -216,14 +235,15 @@ app.get("/api/stats", async (req, res) => {
 
   res.json({ totalBookings, weeklyBookings, activeMentors, pendingRegistrations, totalCredits, bookingsByMentor });
 });
-// ─── PAYMENT ROUTES ───────────────────────────────────────────────────────────
+
+// ─── EXTERNAL ROUTES ─────────────────────────────────────────────────────────
 const paymentRoutes = require("./routes/payment");
 app.use("/api/payment", paymentRoutes);
-// Serve React build in production
 
 const { router: customCallsRouter } = require('./routes/customCalls');
 app.use('/api/custom-calls', customCallsRouter);
 
+// ─── START ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`Proxima server running on port ${PORT}`);
   setInterval(() => {
@@ -232,4 +252,3 @@ app.listen(PORT, () => {
       .catch(() => {});
   }, 14 * 60 * 1000);
 });
-
