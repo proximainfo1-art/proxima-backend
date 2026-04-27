@@ -124,7 +124,10 @@ app.get('/api/mentors/public', async (req, res) => {
 
 // POST mentor (admin add)
 app.post("/api/mentors", async (req, res) => {
-  const mentor = await Mentor.create({ ...req.body, email: req.body.email?.toLowerCase()?.trim() });
+  const name = req.body.name || "";
+  const prefix = name.replace(/\s+/g, "").substring(0, 3).toUpperCase();
+  const referralCode = req.body.referralCode || `${prefix}10`;
+  const mentor = await Mentor.create({ ...req.body, referralCode, email: req.body.email?.toLowerCase()?.trim() });
   res.json(mentor);
 });
 
@@ -253,10 +256,12 @@ app.get("/api/registrations", async (req, res) => {
 app.put("/api/registrations/:id/approve", async (req, res) => {
   const reg = await Registration.findById(req.params.id);
   if (!reg) return res.status(404).json({ error: "Not found" });
+  const prefix = reg.name.replace(/\s+/g, "").substring(0, 3).toUpperCase();
+  const referralCode = `${prefix}10`;
   const mentor = await Mentor.create({
     name: reg.name, college: reg.college, course: reg.course, year: reg.year,
     email: reg.email.toLowerCase().trim(), whatsapp: reg.whatsapp,
-    bio: reg.bio, photo: reg.photo, visible: true, pin: "0000",
+    bio: reg.bio, photo: reg.photo, visible: true, pin: "0000", referralCode,
   });
   await Registration.findByIdAndUpdate(req.params.id, { status: "approved" });
   res.json(mentor);
