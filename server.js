@@ -2,6 +2,46 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const nodemailer = require("nodemailer");
+
+const mailer = nodemailer.createTransport({
+  host: process.env.MAIL_HOST,
+  port: Number(process.env.MAIL_PORT),
+  secure: Number(process.env.MAIL_PORT) === 465,
+  auth: {
+    user: process.env.MAIL_USER,
+    pass: process.env.MAIL_PASS,
+  },
+});
+
+async function sendBookingEmail({ mentorEmail, mentorName, studentName, studentPhone, studentEmail, slot, message }) {
+  try {
+    await mailer.sendMail({
+      from: process.env.MAIL_FROM,
+      to: mentorEmail,
+      subject: `New Session Booked — ${studentName}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 32px; border: 1px solid #E8E2D9; border-radius: 12px;">
+          <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height: 32px; margin-bottom: 24px;" />
+          <h2 style="color: #111; font-size: 20px; margin-bottom: 8px;">You have a new session booked! 🎉</h2>
+          <p style="color: #555; font-size: 15px; margin-bottom: 24px;">Hi ${mentorName}, a student has booked a 30-minute session with you on Proxima.</p>
+          <div style="background: #FFF0EB; border-radius: 10px; padding: 20px; margin-bottom: 24px;">
+            <div style="margin-bottom: 10px;"><span style="color: #888; font-size: 13px;">STUDENT NAME</span><br/><strong style="color: #111; font-size: 15px;">${studentName}</strong></div>
+            <div style="margin-bottom: 10px;"><span style="color: #888; font-size: 13px;">PHONE</span><br/><strong style="color: #111; font-size: 15px;">${studentPhone}</strong></div>
+            <div style="margin-bottom: 10px;"><span style="color: #888; font-size: 13px;">EMAIL</span><br/><strong style="color: #111; font-size: 15px;">${studentEmail}</strong></div>
+            <div style="margin-bottom: 10px;"><span style="color: #888; font-size: 13px;">SLOT</span><br/><strong style="color: #E93800; font-size: 15px;">📅 ${slot}</strong></div>
+            ${message ? `<div><span style="color: #888; font-size: 13px;">THEIR QUERY</span><br/><span style="color: #555; font-size: 14px;">${message}</span></div>` : ""}
+          </div>
+          <p style="color: #555; font-size: 14px; margin-bottom: 8px;">Please log in to your Proxima dashboard to share your Google Meet link with the student.</p>
+          <p style="color: #aaa; font-size: 12px; margin-top: 24px;">— Team Proxima &nbsp;·&nbsp; proxima.info1@gmail.com</p>
+        </div>
+      `,
+    });
+    console.log(`Booking email sent to ${mentorEmail}`);
+  } catch (err) {
+    console.error("Failed to send booking email:", err.message);
+  }
+}
 
 const app = express();
 app.use(cors());
@@ -151,6 +191,20 @@ app.post("/api/bookings", async (req, res) => {
   }
 
   const booking = await Booking.create({ mentorId, slot, referralCode, ...rest });
+
+  // Send email to mentor
+  if (mentor.email) {
+    await sendBookingEmail({
+      mentorEmail: mentor.email,
+      mentorName: mentor.name,
+      studentName: rest.studentName,
+      studentPhone: rest.studentPhone,
+      studentEmail: rest.studentEmail,
+      slot,
+      message: rest.message,
+    });
+  }
+
   res.json(booking);
 });
 
