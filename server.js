@@ -295,6 +295,19 @@ app.get("/api/stats", async (req, res) => {
   res.json({ totalBookings, weeklyBookings, activeMentors, pendingRegistrations, totalCredits, bookingsByMentor });
 });
 
+// ONE-TIME backfill route — delete after use
+app.get("/api/admin/backfill-referral-codes", async (req, res) => {
+  const mentors = await Mentor.find({ $or: [{ referralCode: "" }, { referralCode: null }, { referralCode: { $exists: false } }] });
+  const results = [];
+  for (const mentor of mentors) {
+    const firstName = mentor.name.trim().split(" ")[0].toUpperCase();
+    const code = `${firstName}10`;
+    await Mentor.findByIdAndUpdate(mentor._id, { referralCode: code });
+    results.push(`${mentor.name} → ${code}`);
+  }
+  res.json({ updated: results.length, results });
+});
+
 // ─── EXTERNAL ROUTES ─────────────────────────────────────────────────────────
 const paymentRoutes = require("./routes/payment");
 app.use("/api/payment", paymentRoutes);
