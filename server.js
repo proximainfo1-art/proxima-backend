@@ -131,9 +131,10 @@ app.post("/api/mentors", async (req, res) => {
   res.json(mentor);
 });
 
-// PUT mentor (admin edit)
+// PUT mentor (admin edit) — never overwrite slots via this route
 app.put("/api/mentors/:id", async (req, res) => {
-  const mentor = await Mentor.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  const { slots, ...safeBody } = req.body;
+  const mentor = await Mentor.findByIdAndUpdate(req.params.id, safeBody, { new: true });
   res.json(mentor);
 });
 
@@ -310,5 +311,5 @@ app.listen(PORT, () => {
     fetch(`https://proxima-backend-hdho.onrender.com/api/mentors`)
       .then(() => console.log("Self-ping to stay awake"))
       .catch(() => {});
-  }, 14 * 60 * 1000);
+  }, 4 * 60 * 1000); // every 4 minutes
 });
