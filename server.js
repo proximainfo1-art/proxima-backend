@@ -191,7 +191,8 @@ app.post("/api/bookings", async (req, res) => {
   if (referralCode) {
     const refMentor = await Mentor.findOne({ referralCode: referralCode.toUpperCase() });
     if (!refMentor) return res.status(400).json({ error: "Invalid referral code" });
-    await Mentor.findByIdAndUpdate(refMentor._id, { $inc: { credits: 10 } });
+    const creditAmount = Math.floor((mentor.price || 299) * 0.15);
+    await Mentor.findByIdAndUpdate(refMentor._id, { $inc: { credits: creditAmount } });
   }
 
   const booking = await Booking.create({ mentorId, slot, referralCode, ...rest });
