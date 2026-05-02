@@ -274,6 +274,33 @@ app.delete("/api/registrations/:id", async (req, res) => {
   res.json({ success: true });
 });
 
+
+// ─── GROUP SESSION SCHEMA ────────────────────────────────────────────────────
+const GroupSessionSchema = new mongoose.Schema({
+  mentorId: String,
+  mentorName: String,
+  mentorPhoto: String,
+  mentorCollege: String,
+  mentorCourse: String,
+  mentorYear: String,
+  topic: String,
+  date: String,
+  time: String,
+  slot: String,
+  price: { type: Number, default: 99 },
+  maxParticipants: { type: Number, default: 5 },
+  participants: [{
+    name: String,
+    email: String,
+    phone: String,
+    paymentId: { type: String, default: null },
+  }],
+  visible: { type: Boolean, default: true },
+  status: { type: String, enum: ["upcoming", "completed", "cancelled"], default: "upcoming" },
+}, { timestamps: true });
+
+const GroupSession = mongoose.model("GroupSession", GroupSessionSchema);
+
 // GET stats
 app.get("/api/stats", async (req, res) => {
   const now = new Date();
@@ -296,6 +323,88 @@ app.get("/api/stats", async (req, res) => {
   res.json({ totalBookings, weeklyBookings, activeMentors, pendingRegistrations, totalCredits, bookingsByMentor });
 });
 
+// ─── GROUP SESSION ROUTES ────────────────────────────────────────────────────
+
+// GET all group sessions (public)
+app.get("/api/group-sessions", async (req, res) => {
+  try {
+    const sessions = await GroupSession.find({ visible: true, status: "upcoming" }).sort({ createdAt: -1 });
+    res.json(sessions);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET all group sessions (admin — all statuses)
+app.get("/api/group-sessions/admin", async (req, res) => {
+  try {
+    const sessions = await GroupSession.find().sort({ createdAt: -1 });
+    res.json(sessions);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST create group session (admin)
+app.post("/api/group-sessions", async (req, res) => {
+  try {
+    const session = await GroupSession.create(req.body);
+    res.json(session);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT update group session (admin)
+app.put("/api/group-sessions/:id", async (req, res) => {
+  try {
+    const session = await GroupSession.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(session);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE group session (admin)
+app.delete("/api/group-sessions/:id", async (req, res) => {
+  try {
+    await GroupSession.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST book a spot in group session
+app.post("/api/group-sessions/:id/book", async (req, res) => {
+  try {
+    const session = await GroupSession.findById(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.participants.length >= session.maxParticipants) {
+      return res.status(400).json({ error: "Session is full" });
+    }
+    const { name, email, phone, paymentId } = req.body;
+    session.participants.push({ name, email, phone, paymentId });
+    await session.save();
+
+    // Send email to participant if email exists
+    if (email && mentor) {
+      try {
+        await mailer.sendMail({
+          from: process.env.MAIL_FROM,
+          to: email,
+          subject: `Group Session Booked — ${session.topic}`,
+          html: `
+            <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
+              <h2 style="color:#111;">You're in! 🎉</h2>
+              <p style="color:#555;">Hi ${name}, your spot in the group session is confirmed.</p>
+              <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
+                <div style="margin-bottom:8px;"><strong>Topic:</strong> ${session.topic}</div>
+                <div style="margin-bottom:8px;"><strong>Mentor:</strong> ${session.mentorName} — ${session.mentorCollege}</div>
+                <div style="margin-bottom:8px;"><strong>Date & Time:</strong> ${session.slot}</div>
+                <div><strong>Spots left:</strong> ${session.maxParticipants - session.participants.length}</div>
+              </div>
+              <p style="color:#555;font-size:14px;">The Google Meet link will be shared before the session.</p>
+              <p style="color:#aaa;font-size:12px;">— Team Proxima</p>
+            </div>
+          `,
+        });
+      } catch (e) { console.error("Email failed:", e.message); }
+    }
+
+    res.json(session);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ─── EXTERNAL ROUTES ─────────────────────────────────────────────────────────
 const paymentRoutes = require("./routes/payment");
