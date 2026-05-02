@@ -365,7 +365,7 @@ app.delete("/api/group-sessions/:id", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST book a spot in group session
+// POST book a spot in group session — with Razorpay payment
 app.post("/api/group-sessions/:id/book", async (req, res) => {
   try {
     const session = await GroupSession.findById(req.params.id);
@@ -374,11 +374,11 @@ app.post("/api/group-sessions/:id/book", async (req, res) => {
       return res.status(400).json({ error: "Session is full" });
     }
     const { name, email, phone, paymentId } = req.body;
-    session.participants.push({ name, email, phone, paymentId });
+    session.participants.push({ name, email, phone, paymentId: paymentId || null });
     await session.save();
 
-    // Send email to participant if email exists
-    if (email && mentor) {
+    // Send confirmation email
+    if (email) {
       try {
         await mailer.sendMail({
           from: process.env.MAIL_FROM,
@@ -386,16 +386,18 @@ app.post("/api/group-sessions/:id/book", async (req, res) => {
           subject: `Group Session Booked — ${session.topic}`,
           html: `
             <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
+              <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
               <h2 style="color:#111;">You're in! 🎉</h2>
               <p style="color:#555;">Hi ${name}, your spot in the group session is confirmed.</p>
               <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
                 <div style="margin-bottom:8px;"><strong>Topic:</strong> ${session.topic}</div>
                 <div style="margin-bottom:8px;"><strong>Mentor:</strong> ${session.mentorName} — ${session.mentorCollege}</div>
                 <div style="margin-bottom:8px;"><strong>Date & Time:</strong> ${session.slot}</div>
-                <div><strong>Spots left:</strong> ${session.maxParticipants - session.participants.length}</div>
+                <div style="margin-bottom:8px;"><strong>Amount Paid:</strong> ₹${session.price}</div>
+                <div><strong>Spots remaining:</strong> ${session.maxParticipants - session.participants.length}</div>
               </div>
-              <p style="color:#555;font-size:14px;">The Google Meet link will be shared before the session.</p>
-              <p style="color:#aaa;font-size:12px;">— Team Proxima</p>
+              <p style="color:#555;font-size:14px;">The Google Meet link will be shared on your WhatsApp before the session starts.</p>
+              <p style="color:#aaa;font-size:12px;">— Team Proxima · proxima.info1@gmail.com</p>
             </div>
           `,
         });
@@ -403,6 +405,50 @@ app.post("/api/group-sessions/:id/book", async (req, res) => {
     }
 
     res.json(session);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST create Razorpay order for group session
+app.post("/api/group-sessions/:id/create-order", async (req, res) => {
+  try {
+    const session = await GroupSession.findById(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.participants.length >= session.maxParticipants) {
+      return res.status(400).json({ error: "Session is full" });
+    }
+
+    const Razorpay = require("razorpay");
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+
+    const order = await razorpay.orders.create({
+      amount: session.price * 100,
+      currency: "INR",
+      receipt: `group_${session._id}_${Date.now()}`,
+    });
+
+    res.json({ orderId: order.id, amount: order.amount });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST verify Razorpay payment for group session
+app.post("/api/group-sessions/:id/verify", async (req, res) => {
+  try {
+    const crypto = require("crypto");
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest("hex");
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({ error: "Payment verification failed" });
+    }
+
+    res.json({ success: true, paymentId: razorpay_payment_id });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
