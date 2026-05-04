@@ -210,6 +210,32 @@ app.post("/api/bookings", async (req, res) => {
     });
   }
 
+  // Send email to mentee
+  if (rest.studentEmail) {
+    try {
+      await mailer.sendMail({
+        from: process.env.MAIL_FROM,
+        to: rest.studentEmail,
+        subject: `Your session with ${mentor.name} is confirmed! 🎉`,
+        html: `
+          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
+            <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+            <h2 style="color:#111;">Booking Confirmed! 🎉</h2>
+            <p style="color:#555;">Hi ${rest.studentName}, your 1-on-1 session is all set.</p>
+            <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
+              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">MENTOR</span><br/><strong style="color:#111;">${mentor.name} — ${mentor.college}</strong></div>
+              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">COURSE</span><br/><strong style="color:#111;">${mentor.course}</strong></div>
+              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">SLOT</span><br/><strong style="color:#E93800;">📅 ${slot}</strong></div>
+              <div><span style="color:#888;font-size:13px;">AMOUNT PAID</span><br/><strong style="color:#111;">₹${mentor.price || 299}</strong></div>
+            </div>
+            <p style="color:#555;font-size:14px;">Your mentor will share the Google Meet link before the session. You'll receive it on this email.</p>
+            <p style="color:#aaa;font-size:12px;margin-top:24px;">— Team Proxima · info@joinproxima.in</p>
+          </div>
+        `,
+      });
+    } catch (e) { console.error("Mentee email failed:", e.message); }
+  }
+
   res.json(booking);
 });
 
@@ -232,19 +258,74 @@ app.put("/api/bookings/:id/notes", async (req, res) => {
   res.json(booking);
 });
 
-// PUT booking meet link
+// PUT booking meet link — sends email directly to student
 app.put("/api/bookings/:id/meetlink", async (req, res) => {
   const booking = await Booking.findByIdAndUpdate(
     req.params.id,
     { meetLink: req.body.meetLink, meetSent: req.body.meetSent },
     { new: true }
   );
+
+  if (req.body.sendToStudent && booking.studentEmail && req.body.meetLink) {
+    try {
+      await mailer.sendMail({
+        from: process.env.MAIL_FROM,
+        to: booking.studentEmail,
+        subject: `Your session link is ready — ${booking.slot}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
+            <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+            <h2 style="color:#111;">Your session link is ready! 🎥</h2>
+            <p style="color:#555;">Hi ${booking.studentName}, your mentor has shared the Google Meet link.</p>
+            <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
+              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">MENTOR</span><br/><strong style="color:#111;">${booking.mentorName}</strong></div>
+              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">SLOT</span><br/><strong style="color:#E93800;">📅 ${booking.slot}</strong></div>
+              <div><span style="color:#888;font-size:13px;">MEET LINK</span><br/>
+                <a href="${req.body.meetLink}" style="color:#2563EB;font-weight:700;word-break:break-all;">${req.body.meetLink}</a>
+              </div>
+            </div>
+            <a href="${req.body.meetLink}" style="display:inline-block;background:#111;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;margin-top:8px;">Join Session →</a>
+            <p style="color:#555;font-size:14px;margin-top:20px;">Issues? <a href="mailto:info@joinproxima.in" style="color:#E93800;">info@joinproxima.in</a></p>
+            <p style="color:#aaa;font-size:12px;margin-top:24px;">— Team Proxima</p>
+          </div>
+        `,
+      });
+      await Booking.findByIdAndUpdate(req.params.id, { meetSent: true });
+    } catch (e) { console.error("Meet link email failed:", e.message); }
+  }
+
   res.json(booking);
 });
 
 // POST registration
 app.post("/api/registrations", async (req, res) => {
   const reg = await Registration.create(req.body);
+
+  if (reg.email) {
+    try {
+      await mailer.sendMail({
+        from: process.env.MAIL_FROM,
+        to: reg.email,
+        subject: `We've received your Proxima application, ${reg.name.split(" ")[0]}!`,
+        html: `
+          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
+            <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+            <h2 style="color:#111;">Application received! 🙌</h2>
+            <p style="color:#555;">Hi ${reg.name.split(" ")[0]}, thanks for applying to be a guide on Proxima.</p>
+            <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
+              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">NAME</span><br/><strong style="color:#111;">${reg.name}</strong></div>
+              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">COLLEGE</span><br/><strong style="color:#111;">${reg.college}</strong></div>
+              <div><span style="color:#888;font-size:13px;">COURSE</span><br/><strong style="color:#111;">${reg.course}</strong></div>
+            </div>
+            <p style="color:#555;font-size:14px;">Our team will review your profile and get back to you within 24 hours. We'll share your login credentials once approved.</p>
+            <p style="color:#555;font-size:14px;">Questions? Reach us at <a href="mailto:info@joinproxima.in" style="color:#E93800;">info@joinproxima.in</a></p>
+            <p style="color:#aaa;font-size:12px;margin-top:24px;">— Team Proxima</p>
+          </div>
+        `,
+      });
+    } catch (e) { console.error("Registration email failed:", e.message); }
+  }
+
   res.json(reg);
 });
 
