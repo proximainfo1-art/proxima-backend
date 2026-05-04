@@ -14,44 +14,13 @@ const mailer = nodemailer.createTransport({
   },
 });
 
-async function sendBookingEmail({ mentorEmail, mentorName, studentName, studentPhone, studentEmail, slot, message }) {
-  try {
-    await mailer.sendMail({
-      from: process.env.MAIL_FROM,
-      to: mentorEmail,
-      subject: `New Session Booked — ${studentName}`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 32px; border: 1px solid #E8E2D9; border-radius: 12px;">
-          <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height: 32px; margin-bottom: 24px;" />
-          <h2 style="color: #111; font-size: 20px; margin-bottom: 8px;">You have a new session booked! 🎉</h2>
-          <p style="color: #555; font-size: 15px; margin-bottom: 24px;">Hi ${mentorName}, a student has booked a 30-minute session with you on Proxima.</p>
-          <div style="background: #FFF0EB; border-radius: 10px; padding: 20px; margin-bottom: 24px;">
-            <div style="margin-bottom: 10px;"><span style="color: #888; font-size: 13px;">STUDENT NAME</span><br/><strong style="color: #111; font-size: 15px;">${studentName}</strong></div>
-            <div style="margin-bottom: 10px;"><span style="color: #888; font-size: 13px;">PHONE</span><br/><strong style="color: #111; font-size: 15px;">${studentPhone}</strong></div>
-            <div style="margin-bottom: 10px;"><span style="color: #888; font-size: 13px;">EMAIL</span><br/><strong style="color: #111; font-size: 15px;">${studentEmail}</strong></div>
-            <div style="margin-bottom: 10px;"><span style="color: #888; font-size: 13px;">SLOT</span><br/><strong style="color: #E93800; font-size: 15px;">📅 ${slot}</strong></div>
-            ${message ? `<div><span style="color: #888; font-size: 13px;">THEIR QUERY</span><br/><span style="color: #555; font-size: 14px;">${message}</span></div>` : ""}
-          </div>
-          <p style="color: #555; font-size: 14px; margin-bottom: 8px;">Please log in to your Proxima dashboard to share your Google Meet link with the student.</p>
-          <p style="color: #aaa; font-size: 12px; margin-top: 24px;">— Team Proxima &nbsp;·&nbsp; proxima.info1@gmail.com</p>
-        </div>
-      `,
-    });
-    console.log(`Booking email sent to ${mentorEmail}`);
-  } catch (err) {
-    console.error("Failed to send booking email:", err.message);
-  }
-}
-
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/proxima";
 const PORT = process.env.PORT || 5000;
 
-// ─── DB ───────────────────────────────────────────────────────────────────────
 mongoose.connect(MONGODB_URI).then(() => console.log("MongoDB connected")).catch(console.error);
 
 // ─── SCHEMAS ─────────────────────────────────────────────────────────────────
@@ -82,23 +51,30 @@ const RegistrationSchema = new mongoose.Schema({
   status: { type: String, default: "pending" },
 }, { timestamps: true });
 
+const GroupSessionSchema = new mongoose.Schema({
+  mentorId: String, mentorName: String, mentorPhoto: String,
+  mentorCollege: String, mentorCourse: String, mentorYear: String,
+  topic: String, date: String, time: String, slot: String,
+  price: { type: Number, default: 99 },
+  maxParticipants: { type: Number, default: 5 },
+  participants: [{ name: String, email: String, phone: String, paymentId: { type: String, default: null } }],
+  visible: { type: Boolean, default: true },
+  status: { type: String, enum: ["upcoming", "completed", "cancelled"], default: "upcoming" },
+}, { timestamps: true });
+
 const Mentor = mongoose.model("Mentor", MentorSchema);
 const Booking = mongoose.model("Booking", BookingSchema);
 const Registration = mongoose.model("Registration", RegistrationSchema);
+const GroupSession = mongoose.model("GroupSession", GroupSessionSchema);
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 
-// Admin login — password lives only in Render environment variables
+// Admin login
 app.post("/api/admin/login", (req, res) => {
   const { password } = req.body;
-  if (!process.env.ADMIN_PASSWORD) {
-    return res.status(500).json({ error: "Server misconfigured: ADMIN_PASSWORD not set" });
-  }
-  if (password === process.env.ADMIN_PASSWORD) {
-    res.json({ success: true });
-  } else {
-    res.status(401).json({ error: "Invalid password" });
-  }
+  if (!process.env.ADMIN_PASSWORD) return res.status(500).json({ error: "Server misconfigured: ADMIN_PASSWORD not set" });
+  if (password === process.env.ADMIN_PASSWORD) res.json({ success: true });
+  else res.status(401).json({ error: "Invalid password" });
 });
 
 // Mentor login
@@ -109,7 +85,7 @@ app.post("/api/mentor/login", async (req, res) => {
   res.json(mentor);
 });
 
-// GET mentors (admin — all fields)
+// GET mentors (admin)
 app.get("/api/mentors", async (req, res) => {
   const query = req.query.all === "true" ? {} : { visible: true };
   const mentors = await Mentor.find(query).sort({ createdAt: -1 });
@@ -131,7 +107,7 @@ app.post("/api/mentors", async (req, res) => {
   res.json(mentor);
 });
 
-// PUT mentor (admin edit) — never overwrite slots via this route
+// PUT mentor (admin edit) — never overwrite slots
 app.put("/api/mentors/:id", async (req, res) => {
   const { slots, ...safeBody } = req.body;
   const mentor = await Mentor.findByIdAndUpdate(req.params.id, safeBody, { new: true });
@@ -149,15 +125,9 @@ app.put("/api/mentors/:id/slots", async (req, res) => {
   const { slots: newSlots } = req.body;
   const mentor = await Mentor.findById(req.params.id);
   if (!mentor) return res.status(404).json({ error: "Mentor not found" });
-
   const bookedSlots = mentor.slots.filter(s => s.status === "booked");
   const newSlotDisplays = new Set(newSlots.map(s => s.display));
-
-  const preservedBooked = bookedSlots.map(s => ({
-    ...s.toObject(),
-    outsideSchedule: !newSlotDisplays.has(s.display),
-  }));
-
+  const preservedBooked = bookedSlots.map(s => ({ ...s.toObject(), outsideSchedule: !newSlotDisplays.has(s.display) }));
   const freshSlots = newSlots.filter(s => !bookedSlots.some(b => b.display === s.display));
   mentor.slots = [...preservedBooked, ...freshSlots];
   await mentor.save();
@@ -197,46 +167,57 @@ app.post("/api/bookings", async (req, res) => {
 
   const booking = await Booking.create({ mentorId, slot, referralCode, ...rest });
 
-  // Send email to mentor
-  if (mentor.email) {
-    await sendBookingEmail({
-      mentorEmail: mentor.email,
-      mentorName: mentor.name,
-      studentName: rest.studentName,
-      studentPhone: rest.studentPhone,
-      studentEmail: rest.studentEmail,
-      slot,
-      message: rest.message,
-    });
-  }
-
-  // Send email to mentee
-  if (rest.studentEmail) {
-    try {
-      await mailer.sendMail({
-        from: process.env.MAIL_FROM,
-        to: rest.studentEmail,
-        subject: `Your session with ${mentor.name} is confirmed! 🎉`,
-        html: `
-          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
-            <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
-            <h2 style="color:#111;">Booking Confirmed! 🎉</h2>
-            <p style="color:#555;">Hi ${rest.studentName}, your 1-on-1 session is all set.</p>
-            <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
-              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">MENTOR</span><br/><strong style="color:#111;">${mentor.name} — ${mentor.college}</strong></div>
-              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">COURSE</span><br/><strong style="color:#111;">${mentor.course}</strong></div>
-              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">SLOT</span><br/><strong style="color:#E93800;">📅 ${slot}</strong></div>
-              <div><span style="color:#888;font-size:13px;">AMOUNT PAID</span><br/><strong style="color:#111;">₹${mentor.price || 299}</strong></div>
-            </div>
-            <p style="color:#555;font-size:14px;">Your mentor will share the Google Meet link before the session. You'll receive it on this email.</p>
-            <p style="color:#aaa;font-size:12px;margin-top:24px;">— Team Proxima · info@joinproxima.in</p>
-          </div>
-        `,
-      });
-    } catch (e) { console.error("Mentee email failed:", e.message); }
-  }
-
+  // Respond immediately — emails fire in background
   res.json(booking);
+
+  // Email to mentor
+  if (mentor.email) {
+    mailer.sendMail({
+      from: process.env.MAIL_FROM,
+      to: mentor.email,
+      subject: `New Session Booked — ${rest.studentName}`,
+      html: `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
+          <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+          <h2 style="color:#111;">New session booked! 🎉</h2>
+          <p style="color:#555;">Hi ${mentor.name}, a student has booked a 30-minute session with you.</p>
+          <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
+            <div style="margin-bottom:10px;"><span style="color:#888;font-size:13px;">STUDENT NAME</span><br/><strong style="color:#111;">${rest.studentName}</strong></div>
+            <div style="margin-bottom:10px;"><span style="color:#888;font-size:13px;">PHONE</span><br/><strong style="color:#111;">${rest.studentPhone}</strong></div>
+            <div style="margin-bottom:10px;"><span style="color:#888;font-size:13px;">EMAIL</span><br/><strong style="color:#111;">${rest.studentEmail}</strong></div>
+            <div style="margin-bottom:10px;"><span style="color:#888;font-size:13px;">SLOT</span><br/><strong style="color:#E93800;">📅 ${slot}</strong></div>
+            ${rest.message ? `<div><span style="color:#888;font-size:13px;">THEIR QUERY</span><br/><span style="color:#555;">${rest.message}</span></div>` : ""}
+          </div>
+          <p style="color:#555;font-size:14px;">Log in to your Proxima dashboard to share your Google Meet link with the student.</p>
+          <p style="color:#aaa;font-size:12px;margin-top:24px;">— Team Proxima · info@joinproxima.in</p>
+        </div>
+      `,
+    }).catch(e => console.error("Mentor email failed:", e.message));
+  }
+
+  // Email to mentee
+  if (rest.studentEmail) {
+    mailer.sendMail({
+      from: process.env.MAIL_FROM,
+      to: rest.studentEmail,
+      subject: `Your session with ${mentor.name} is confirmed! 🎉`,
+      html: `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
+          <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+          <h2 style="color:#111;">Booking Confirmed! 🎉</h2>
+          <p style="color:#555;">Hi ${rest.studentName}, your 1-on-1 session is all set.</p>
+          <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
+            <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">MENTOR</span><br/><strong style="color:#111;">${mentor.name} — ${mentor.college}</strong></div>
+            <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">COURSE</span><br/><strong style="color:#111;">${mentor.course}</strong></div>
+            <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">SLOT</span><br/><strong style="color:#E93800;">📅 ${slot}</strong></div>
+            <div><span style="color:#888;font-size:13px;">AMOUNT PAID</span><br/><strong style="color:#111;">₹${mentor.price || 299}</strong></div>
+          </div>
+          <p style="color:#555;font-size:14px;">Your mentor will share the Google Meet link before the session. You'll receive it on this email.</p>
+          <p style="color:#aaa;font-size:12px;margin-top:24px;">— Team Proxima · info@joinproxima.in</p>
+        </div>
+      `,
+    }).catch(e => console.error("Mentee email failed:", e.message));
+  }
 });
 
 // GET bookings
@@ -266,66 +247,37 @@ app.put("/api/bookings/:id/meetlink", async (req, res) => {
     { new: true }
   );
 
-  if (req.body.sendToStudent && booking.studentEmail && req.body.meetLink) {
-    try {
-      await mailer.sendMail({
-        from: process.env.MAIL_FROM,
-        to: booking.studentEmail,
-        subject: `Your session link is ready — ${booking.slot}`,
-        html: `
-          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
-            <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
-            <h2 style="color:#111;">Your session link is ready! 🎥</h2>
-            <p style="color:#555;">Hi ${booking.studentName}, your mentor has shared the Google Meet link.</p>
-            <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
-              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">MENTOR</span><br/><strong style="color:#111;">${booking.mentorName}</strong></div>
-              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">SLOT</span><br/><strong style="color:#E93800;">📅 ${booking.slot}</strong></div>
-              <div><span style="color:#888;font-size:13px;">MEET LINK</span><br/>
-                <a href="${req.body.meetLink}" style="color:#2563EB;font-weight:700;word-break:break-all;">${req.body.meetLink}</a>
-              </div>
-            </div>
-            <a href="${req.body.meetLink}" style="display:inline-block;background:#111;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;margin-top:8px;">Join Session →</a>
-            <p style="color:#555;font-size:14px;margin-top:20px;">Issues? <a href="mailto:info@joinproxima.in" style="color:#E93800;">info@joinproxima.in</a></p>
-            <p style="color:#aaa;font-size:12px;margin-top:24px;">— Team Proxima</p>
-          </div>
-        `,
-      });
-      await Booking.findByIdAndUpdate(req.params.id, { meetSent: true });
-    } catch (e) { console.error("Meet link email failed:", e.message); }
-  }
-
+  // Respond immediately
   res.json(booking);
+
+  if (req.body.sendToStudent && booking.studentEmail && req.body.meetLink) {
+    Booking.findByIdAndUpdate(req.params.id, { meetSent: true }).catch(() => {});
+    mailer.sendMail({
+      from: process.env.MAIL_FROM,
+      to: booking.studentEmail,
+      subject: `Your session link is ready — ${booking.slot}`,
+      html: `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
+          <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+          <h2 style="color:#111;">Your session link is ready! 🎥</h2>
+          <p style="color:#555;">Hi ${booking.studentName}, your mentor has shared the Google Meet link.</p>
+          <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
+            <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">MENTOR</span><br/><strong style="color:#111;">${booking.mentorName}</strong></div>
+            <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">SLOT</span><br/><strong style="color:#E93800;">📅 ${booking.slot}</strong></div>
+            <div><span style="color:#888;font-size:13px;">MEET LINK</span><br/><a href="${req.body.meetLink}" style="color:#2563EB;font-weight:700;word-break:break-all;">${req.body.meetLink}</a></div>
+          </div>
+          <a href="${req.body.meetLink}" style="display:inline-block;background:#111;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;margin-top:8px;">Join Session →</a>
+          <p style="color:#555;font-size:14px;margin-top:20px;">Issues? <a href="mailto:info@joinproxima.in" style="color:#E93800;">info@joinproxima.in</a></p>
+          <p style="color:#aaa;font-size:12px;margin-top:24px;">— Team Proxima</p>
+        </div>
+      `,
+    }).catch(e => console.error("Meet link email failed:", e.message));
+  }
 });
 
-// POST registration
+// POST registration — no email on submission
 app.post("/api/registrations", async (req, res) => {
   const reg = await Registration.create(req.body);
-
-  if (reg.email) {
-    try {
-      await mailer.sendMail({
-        from: process.env.MAIL_FROM,
-        to: reg.email,
-        subject: `We've received your Proxima application, ${reg.name.split(" ")[0]}!`,
-        html: `
-          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
-            <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
-            <h2 style="color:#111;">Application received! 🙌</h2>
-            <p style="color:#555;">Hi ${reg.name.split(" ")[0]}, thanks for applying to be a guide on Proxima.</p>
-            <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
-              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">NAME</span><br/><strong style="color:#111;">${reg.name}</strong></div>
-              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">COLLEGE</span><br/><strong style="color:#111;">${reg.college}</strong></div>
-              <div><span style="color:#888;font-size:13px;">COURSE</span><br/><strong style="color:#111;">${reg.course}</strong></div>
-            </div>
-            <p style="color:#555;font-size:14px;">Our team will review your profile and get back to you within 24 hours. We'll share your login credentials once approved.</p>
-            <p style="color:#555;font-size:14px;">Questions? Reach us at <a href="mailto:info@joinproxima.in" style="color:#E93800;">info@joinproxima.in</a></p>
-            <p style="color:#aaa;font-size:12px;margin-top:24px;">— Team Proxima</p>
-          </div>
-        `,
-      });
-    } catch (e) { console.error("Registration email failed:", e.message); }
-  }
-
   res.json(reg);
 });
 
@@ -335,7 +287,7 @@ app.get("/api/registrations", async (req, res) => {
   res.json(regs);
 });
 
-// PUT approve registration
+// PUT approve registration — sends approval email with credentials
 app.put("/api/registrations/:id/approve", async (req, res) => {
   const reg = await Registration.findById(req.params.id);
   if (!reg) return res.status(404).json({ error: "Not found" });
@@ -347,7 +299,35 @@ app.put("/api/registrations/:id/approve", async (req, res) => {
     bio: reg.bio, photo: reg.photo, visible: true, pin: "0000", referralCode,
   });
   await Registration.findByIdAndUpdate(req.params.id, { status: "approved" });
+
+  // Respond immediately
   res.json(mentor);
+
+  // Send approval email in background
+  if (reg.email) {
+    mailer.sendMail({
+      from: process.env.MAIL_FROM,
+      to: reg.email,
+      subject: `You're in! Welcome to Proxima 🎉`,
+      html: `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
+          <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+          <h2 style="color:#111;">Congratulations, ${reg.name.split(" ")[0]}! 🎉</h2>
+          <p style="color:#555;font-size:15px;">Your application has been approved. You are now an official guide on Proxima.</p>
+          <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:20px 0;">
+            <div style="font-size:12px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Your Login Details</div>
+            <div style="margin-bottom:10px;"><span style="color:#888;font-size:13px;">EMAIL</span><br/><strong style="color:#111;">${reg.email}</strong></div>
+            <div style="margin-bottom:10px;"><span style="color:#888;font-size:13px;">PIN</span><br/><strong style="color:#111;">0000 (change this from your dashboard)</strong></div>
+            <div><span style="color:#888;font-size:13px;">YOUR REFERRAL CODE</span><br/><strong style="color:#E93800;font-size:18px;">${referralCode}</strong><br/><span style="color:#888;font-size:12px;">Share this with students — you earn 15% of every session booked through your code</span></div>
+          </div>
+          <a href="https://joinproxima.in/#mentor-login" style="display:inline-block;background:#111;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;margin-bottom:20px;">Login to Dashboard →</a>
+          <p style="color:#555;font-size:14px;">Once logged in, set up your availability slots and update your PIN. Students can start booking you right away.</p>
+          <p style="color:#555;font-size:14px;">You're helping students make one of the most important decisions of their lives — thank you for being part of this.</p>
+          <p style="color:#aaa;font-size:12px;margin-top:24px;">— Team Proxima · info@joinproxima.in</p>
+        </div>
+      `,
+    }).catch(e => console.error("Approval email failed:", e.message));
+  }
 });
 
 // DELETE registration
@@ -356,38 +336,10 @@ app.delete("/api/registrations/:id", async (req, res) => {
   res.json({ success: true });
 });
 
-
-// ─── GROUP SESSION SCHEMA ────────────────────────────────────────────────────
-const GroupSessionSchema = new mongoose.Schema({
-  mentorId: String,
-  mentorName: String,
-  mentorPhoto: String,
-  mentorCollege: String,
-  mentorCourse: String,
-  mentorYear: String,
-  topic: String,
-  date: String,
-  time: String,
-  slot: String,
-  price: { type: Number, default: 99 },
-  maxParticipants: { type: Number, default: 5 },
-  participants: [{
-    name: String,
-    email: String,
-    phone: String,
-    paymentId: { type: String, default: null },
-  }],
-  visible: { type: Boolean, default: true },
-  status: { type: String, enum: ["upcoming", "completed", "cancelled"], default: "upcoming" },
-}, { timestamps: true });
-
-const GroupSession = mongoose.model("GroupSession", GroupSessionSchema);
-
 // GET stats
 app.get("/api/stats", async (req, res) => {
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
   const [totalBookings, weeklyBookings, activeMentors, pendingRegistrations, mentors] = await Promise.all([
     Booking.countDocuments(),
     Booking.countDocuments({ createdAt: { $gte: weekAgo } }),
@@ -395,19 +347,15 @@ app.get("/api/stats", async (req, res) => {
     Registration.countDocuments({ status: "pending" }),
     Mentor.find({}, "credits"),
   ]);
-
   const totalCredits = mentors.reduce((sum, m) => sum + (m.credits || 0), 0);
-
   const bookingsByMentorArr = await Booking.aggregate([{ $group: { _id: "$mentorId", count: { $sum: 1 } } }]);
   const bookingsByMentor = {};
   bookingsByMentorArr.forEach(b => { bookingsByMentor[b._id] = b.count; });
-
   res.json({ totalBookings, weeklyBookings, activeMentors, pendingRegistrations, totalCredits, bookingsByMentor });
 });
 
 // ─── GROUP SESSION ROUTES ────────────────────────────────────────────────────
 
-// GET all group sessions (public)
 app.get("/api/group-sessions", async (req, res) => {
   try {
     const sessions = await GroupSession.find({ visible: true, status: "upcoming" }).sort({ createdAt: -1 });
@@ -415,7 +363,6 @@ app.get("/api/group-sessions", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET all group sessions (admin — all statuses)
 app.get("/api/group-sessions/admin", async (req, res) => {
   try {
     const sessions = await GroupSession.find().sort({ createdAt: -1 });
@@ -423,7 +370,6 @@ app.get("/api/group-sessions/admin", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST create group session (admin)
 app.post("/api/group-sessions", async (req, res) => {
   try {
     const session = await GroupSession.create(req.body);
@@ -431,7 +377,6 @@ app.post("/api/group-sessions", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PUT update group session (admin)
 app.put("/api/group-sessions/:id", async (req, res) => {
   try {
     const session = await GroupSession.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -439,7 +384,6 @@ app.put("/api/group-sessions/:id", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE group session (admin)
 app.delete("/api/group-sessions/:id", async (req, res) => {
   try {
     await GroupSession.findByIdAndDelete(req.params.id);
@@ -447,89 +391,61 @@ app.delete("/api/group-sessions/:id", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST book a spot in group session — with Razorpay payment
 app.post("/api/group-sessions/:id/book", async (req, res) => {
   try {
     const session = await GroupSession.findById(req.params.id);
     if (!session) return res.status(404).json({ error: "Session not found" });
-    if (session.participants.length >= session.maxParticipants) {
-      return res.status(400).json({ error: "Session is full" });
-    }
+    if (session.participants.length >= session.maxParticipants) return res.status(400).json({ error: "Session is full" });
     const { name, email, phone, paymentId } = req.body;
     session.participants.push({ name, email, phone, paymentId: paymentId || null });
     await session.save();
 
-    // Send confirmation email
-    if (email) {
-      try {
-        await mailer.sendMail({
-          from: process.env.MAIL_FROM,
-          to: email,
-          subject: `Group Session Booked — ${session.topic}`,
-          html: `
-            <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
-              <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
-              <h2 style="color:#111;">You're in! 🎉</h2>
-              <p style="color:#555;">Hi ${name}, your spot in the group session is confirmed.</p>
-              <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
-                <div style="margin-bottom:8px;"><strong>Topic:</strong> ${session.topic}</div>
-                <div style="margin-bottom:8px;"><strong>Mentor:</strong> ${session.mentorName} — ${session.mentorCollege}</div>
-                <div style="margin-bottom:8px;"><strong>Date & Time:</strong> ${session.slot}</div>
-                <div style="margin-bottom:8px;"><strong>Amount Paid:</strong> ₹${session.price}</div>
-                <div><strong>Spots remaining:</strong> ${session.maxParticipants - session.participants.length}</div>
-              </div>
-              <p style="color:#555;font-size:14px;">The Google Meet link will be shared on your WhatsApp before the session starts.</p>
-              <p style="color:#aaa;font-size:12px;">— Team Proxima · proxima.info1@gmail.com</p>
-            </div>
-          `,
-        });
-      } catch (e) { console.error("Email failed:", e.message); }
-    }
-
     res.json(session);
+
+    if (email) {
+      mailer.sendMail({
+        from: process.env.MAIL_FROM,
+        to: email,
+        subject: `Group Session Booked — ${session.topic}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
+            <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+            <h2 style="color:#111;">You're in! 🎉</h2>
+            <p style="color:#555;">Hi ${name}, your spot in the group session is confirmed.</p>
+            <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
+              <div style="margin-bottom:8px;"><strong>Topic:</strong> ${session.topic}</div>
+              <div style="margin-bottom:8px;"><strong>Mentor:</strong> ${session.mentorName} — ${session.mentorCollege}</div>
+              <div style="margin-bottom:8px;"><strong>Date & Time:</strong> ${session.slot}</div>
+              <div style="margin-bottom:8px;"><strong>Amount Paid:</strong> ₹${session.price}</div>
+              <div><strong>Spots remaining:</strong> ${session.maxParticipants - session.participants.length}</div>
+            </div>
+            <p style="color:#555;font-size:14px;">The Google Meet link will be shared on this email before the session starts.</p>
+            <p style="color:#aaa;font-size:12px;">— Team Proxima · info@joinproxima.in</p>
+          </div>
+        `,
+      }).catch(e => console.error("Group email failed:", e.message));
+    }
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST create Razorpay order for group session
 app.post("/api/group-sessions/:id/create-order", async (req, res) => {
   try {
     const session = await GroupSession.findById(req.params.id);
     if (!session) return res.status(404).json({ error: "Session not found" });
-    if (session.participants.length >= session.maxParticipants) {
-      return res.status(400).json({ error: "Session is full" });
-    }
-
+    if (session.participants.length >= session.maxParticipants) return res.status(400).json({ error: "Session is full" });
     const Razorpay = require("razorpay");
-    const razorpay = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
-    });
-
-    const order = await razorpay.orders.create({
-      amount: session.price * 100,
-      currency: "INR",
-      receipt: `group_${session._id}_${Date.now()}`,
-    });
-
+    const razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
+    const order = await razorpay.orders.create({ amount: session.price * 100, currency: "INR", receipt: `group_${session._id}_${Date.now()}` });
     res.json({ orderId: order.id, amount: order.amount });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST verify Razorpay payment for group session
 app.post("/api/group-sessions/:id/verify", async (req, res) => {
   try {
     const crypto = require("crypto");
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      .digest("hex");
-
-    if (expectedSignature !== razorpay_signature) {
-      return res.status(400).json({ error: "Payment verification failed" });
-    }
-
+    const expectedSignature = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET).update(`${razorpay_order_id}|${razorpay_payment_id}`).digest("hex");
+    if (expectedSignature !== razorpay_signature) return res.status(400).json({ error: "Payment verification failed" });
     res.json({ success: true, paymentId: razorpay_payment_id });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -548,5 +464,5 @@ app.listen(PORT, () => {
     fetch(`https://proxima-backend-hdho.onrender.com/api/mentors`)
       .then(() => console.log("Self-ping to stay awake"))
       .catch(() => {});
-  }, 4 * 60 * 1000); // every 4 minutes
+  }, 4 * 60 * 1000);
 });
