@@ -2,17 +2,25 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const nodemailer = require("nodemailer");
+const axios = require("axios");
 
-const mailer = nodemailer.createTransport({
-  host: process.env.MAIL_HOST,
-  port: Number(process.env.MAIL_PORT),
-  secure: Number(process.env.MAIL_PORT) === 465,
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
+const mailer = {
+  sendMail: async ({ from, to, subject, html }) => {
+    const name = from.includes("<") ? from.split("<")[0].trim() : "Proxima";
+    const email = from.includes("<") ? from.split("<")[1].replace(">", "").trim() : from;
+    await axios.post("https://api.brevo.com/v3/smtp/email", {
+      sender: { name, email },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }, {
+      headers: {
+        "api-key": process.env.BREVO_API_KEY,
+        "Content-Type": "application/json",
+      },
+    });
   },
-});
+};
 
 const app = express();
 app.use(cors());
