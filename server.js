@@ -459,22 +459,6 @@ app.post("/api/group-sessions/:id/verify", async (req, res) => {
 });
 
 
-// TEMP — delete after testing
-app.get("/api/test-email", async (req, res) => {
-  try {
-    await mailer.sendMail({
-      from: process.env.MAIL_FROM,
-      to: "proxima.info1@gmail.com",
-      subject: "Proxima test email",
-      html: "<p>If you got this, email works.</p>",
-    });
-    res.json({ success: true, from: process.env.MAIL_FROM, host: process.env.MAIL_HOST });
-  } catch (e) {
-    res.status(500).json({ error: e.message, host: process.env.MAIL_HOST, user: process.env.MAIL_USER });
-  }
-});
-
-
 // ─── EXTERNAL ROUTES ─────────────────────────────────────────────────────────
 const paymentRoutes = require("./routes/payment");
 app.use("/api/payment", paymentRoutes);
