@@ -70,10 +70,20 @@ const GroupSessionSchema = new mongoose.Schema({
   status: { type: String, enum: ["upcoming", "completed", "cancelled"], default: "upcoming" },
 }, { timestamps: true });
 
+const InfluencerSchema = new mongoose.Schema({
+  name: String,
+  code: { type: String, unique: true },
+  email: String,
+  totalEarnings: { type: Number, default: 0 },
+  totalBookings: { type: Number, default: 0 },
+  visible: { type: Boolean, default: true },
+}, { timestamps: true });
+
 const Mentor = mongoose.model("Mentor", MentorSchema);
 const Booking = mongoose.model("Booking", BookingSchema);
 const Registration = mongoose.model("Registration", RegistrationSchema);
 const GroupSession = mongoose.model("GroupSession", GroupSessionSchema);
+const Influencer = mongoose.model("Influencer", InfluencerSchema);
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 
@@ -167,10 +177,21 @@ app.post("/api/bookings", async (req, res) => {
   await mentor.save();
 
   if (referralCode) {
-    const refMentor = await Mentor.findOne({ referralCode: referralCode.toUpperCase() });
-    if (!refMentor) return res.status(400).json({ error: "Invalid referral code" });
-    const creditAmount = Math.floor((mentor.price || 299) * 0.15);
-    await Mentor.findByIdAndUpdate(refMentor._id, { $inc: { credits: creditAmount } });
+    const code = referralCode.toUpperCase();
+    const refMentor = await Mentor.findOne({ referralCode: code });
+    const refInfluencer = await Influencer.findOne({ code });
+
+    if (refMentor) {
+      const creditAmount = Math.floor((mentor.price || 299) * 0.15);
+      await Mentor.findByIdAndUpdate(refMentor._id, { $inc: { credits: creditAmount } });
+    } else if (refInfluencer) {
+      const earningAmount = Math.floor((mentor.price || 299) * 0.20);
+      await Influencer.findByIdAndUpdate(refInfluencer._id, {
+        $inc: { totalEarnings: earningAmount, totalBookings: 1 }
+      });
+    } else {
+      return res.status(400).json({ error: "Invalid referral code" });
+    }
   }
 
   const booking = await Booking.create({ mentorId, slot, referralCode, ...rest });
@@ -455,6 +476,41 @@ app.post("/api/group-sessions/:id/verify", async (req, res) => {
     const expectedSignature = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET).update(`${razorpay_order_id}|${razorpay_payment_id}`).digest("hex");
     if (expectedSignature !== razorpay_signature) return res.status(400).json({ error: "Payment verification failed" });
     res.json({ success: true, paymentId: razorpay_payment_id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── INFLUENCER ROUTES ───────────────────────────────────────────────────────
+
+// GET all influencers (admin)
+app.get("/api/influencers", async (req, res) => {
+  try {
+    const influencers = await Influencer.find().sort({ createdAt: -1 });
+    res.json(influencers);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST create influencer (admin)
+app.post("/api/influencers", async (req, res) => {
+  try {
+    const code = req.body.name.trim().toUpperCase().replace(/\s+/g, "");
+    const influencer = await Influencer.create({ ...req.body, code });
+    res.json(influencer);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT update influencer (admin)
+app.put("/api/influencers/:id", async (req, res) => {
+  try {
+    const influencer = await Influencer.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(influencer);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE influencer (admin)
+app.delete("/api/influencers/:id", async (req, res) => {
+  try {
+    await Influencer.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
