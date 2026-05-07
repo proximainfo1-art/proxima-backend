@@ -41,6 +41,7 @@ const MentorSchema = new mongoose.Schema({
   sessions: { type: Number, default: 0 }, credits: { type: Number, default: 0 },
   referralCode: String, pin: { type: String, default: "0000" },
   visible: { type: Boolean, default: true },
+  featured: { type: Boolean, default: false },
   slots: [SlotSchema],
 }, { timestamps: true });
 
@@ -189,6 +190,31 @@ app.post("/api/bookings", async (req, res) => {
       await Influencer.findByIdAndUpdate(refInfluencer._id, {
         $inc: { totalEarnings: earningAmount, totalBookings: 1 }
       });
+
+      // Email to influencer — non blocking
+      if (refInfluencer.email) {
+        mailer.sendMail({
+          from: process.env.MAIL_FROM,
+          to: refInfluencer.email,
+          subject: `New booking through your code ${refInfluencer.code}! 🎉`,
+          html: `
+            <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
+              <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+              <h2 style="color:#111;">A session was booked using your code! 🎉</h2>
+              <p style="color:#555;">Hey ${refInfluencer.name}, someone just booked a session on Proxima using your referral code <strong style="color:#E93800;">${refInfluencer.code}</strong>.</p>
+              <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
+                <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">MENTOR</span><br/><strong style="color:#111;">${mentor.name} — ${mentor.college}</strong></div>
+                <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">SESSION SLOT</span><br/><strong style="color:#E93800;">📅 ${slot}</strong></div>
+                <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">SESSION PRICE</span><br/><strong style="color:#111;">₹${mentor.price || 299}</strong></div>
+                <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">YOUR EARNINGS THIS SESSION</span><br/><strong style="color:#16A34A;font-size:18px;">₹${earningAmount}</strong></div>
+                <div><span style="color:#888;font-size:13px;">TOTAL EARNINGS SO FAR</span><br/><strong style="color:#111;">₹${refInfluencer.totalEarnings + earningAmount}</strong></div>
+              </div>
+              <p style="color:#555;font-size:14px;">Keep sharing your code — every session booked through it adds to your earnings.</p>
+              <p style="color:#aaa;font-size:12px;margin-top:24px;">— Team Proxima · info@joinproxima.in</p>
+            </div>
+          `,
+        }).catch(e => console.error("Influencer email failed:", e.message));
+      }
     } else {
       return res.status(400).json({ error: "Invalid referral code" });
     }
