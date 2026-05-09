@@ -80,7 +80,19 @@ const InfluencerSchema = new mongoose.Schema({
   visible: { type: Boolean, default: true },
 }, { timestamps: true });
 
+const FreeSessionSchema = new mongoose.Schema({
+  type: { type: String, enum: ["onetoone", "group"], default: "onetoone" },
+  mentorId: String, mentorName: String, mentorPhoto: String,
+  mentorCollege: String, mentorCourse: String, mentorYear: String,
+  slot: String, topic: String,
+  maxParticipants: { type: Number, default: 1 },
+  participants: [{ name: String, email: String, phone: String }],
+  visible: { type: Boolean, default: true },
+  status: { type: String, enum: ["upcoming", "completed"], default: "upcoming" },
+}, { timestamps: true });
+
 const Mentor = mongoose.model("Mentor", MentorSchema);
+const FreeSession = mongoose.model("FreeSession", FreeSessionSchema);
 const Booking = mongoose.model("Booking", BookingSchema);
 const Registration = mongoose.model("Registration", RegistrationSchema);
 const GroupSession = mongoose.model("GroupSession", GroupSessionSchema);
@@ -540,6 +552,79 @@ app.delete("/api/influencers/:id", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ─── FREE SESSION ROUTES ─────────────────────────────────────────────────────
+
+app.get("/api/free-sessions", async (req, res) => {
+  try {
+    const sessions = await FreeSession.find({ visible: true, status: "upcoming" }).sort({ createdAt: -1 });
+    res.json(sessions);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/free-sessions/admin", async (req, res) => {
+  try {
+    const sessions = await FreeSession.find().sort({ createdAt: -1 });
+    res.json(sessions);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/free-sessions", async (req, res) => {
+  try {
+    const session = await FreeSession.create(req.body);
+    res.json(session);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put("/api/free-sessions/:id", async (req, res) => {
+  try {
+    const session = await FreeSession.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(session);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete("/api/free-sessions/:id", async (req, res) => {
+  try {
+    await FreeSession.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/free-sessions/:id/book", async (req, res) => {
+  try {
+    const session = await FreeSession.findById(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.participants.length >= session.maxParticipants) return res.status(400).json({ error: "Session is full" });
+    const { name, email, phone } = req.body;
+    session.participants.push({ name, email, phone });
+    await session.save();
+
+    res.json(session);
+
+    if (email) {
+      mailer.sendMail({
+        from: process.env.MAIL_FROM,
+        to: email,
+        subject: `Your free session is confirmed! 🎉`,
+        html: `
+          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
+            <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+            <h2 style="color:#111;">You're booked! 🎉</h2>
+            <p style="color:#555;">Hi ${name}, your free session is confirmed.</p>
+            <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
+              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">MENTOR</span><br/><strong style="color:#111;">${session.mentorName} — ${session.mentorCollege}</strong></div>
+              ${session.topic ? `<div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">TOPIC</span><br/><strong style="color:#111;">${session.topic}</strong></div>` : ""}
+              <div style="margin-bottom:8px;"><span style="color:#888;font-size:13px;">SLOT</span><br/><strong style="color:#E93800;">📅 ${session.slot}</strong></div>
+              <div><span style="color:#888;font-size:13px;">AMOUNT</span><br/><strong style="color:#16A34A;font-size:16px;">FREE</strong></div>
+            </div>
+            <p style="color:#555;font-size:14px;">The Google Meet link will be shared on this email before the session.</p>
+            <p style="color:#aaa;font-size:12px;margin-top:24px;">— Team Proxima · info@joinproxima.in</p>
+          </div>
+        `,
+      }).catch(e => console.error("Free session email failed:", e.message));
+    }
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ─── EXTERNAL ROUTES ─────────────────────────────────────────────────────────
 const paymentRoutes = require("./routes/payment");
