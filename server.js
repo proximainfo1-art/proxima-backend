@@ -85,7 +85,7 @@ const FreeSessionSchema = new mongoose.Schema({
   mentorId: String, mentorName: String, mentorPhoto: String,
   mentorCollege: String, mentorCourse: String, mentorYear: String,
   slot: String, topic: String,
-  maxParticipants: { type: Number, default: 1 },
+  maxParticipants: { type: Number, default: 1000 },
   participants: [{ name: String, email: String, phone: String }],
   visible: { type: Boolean, default: true },
   status: { type: String, enum: ["upcoming", "completed"], default: "upcoming" },
@@ -596,6 +596,13 @@ app.post("/api/free-sessions/:id/book", async (req, res) => {
     if (!session) return res.status(404).json({ error: "Session not found" });
     if (session.participants.length >= session.maxParticipants) return res.status(400).json({ error: "Session is full" });
     const { name, email, phone } = req.body;
+
+    // Check for duplicate registration by email or phone
+    const alreadyRegistered = session.participants.some(
+      p => p.email?.toLowerCase() === email?.toLowerCase() || p.phone === phone
+    );
+    if (alreadyRegistered) return res.status(400).json({ error: "You have already registered for this session." });
+
     session.participants.push({ name, email, phone });
     await session.save();
 
