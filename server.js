@@ -42,6 +42,7 @@ const MentorSchema = new mongoose.Schema({
   referralCode: String, pin: { type: String, default: "0000" },
   visible: { type: Boolean, default: true },
   featured: { type: Boolean, default: false },
+  featuredOrder: { type: Number, default: 0 },
   slots: [SlotSchema],
 }, { timestamps: true });
 
