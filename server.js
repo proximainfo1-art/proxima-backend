@@ -212,7 +212,7 @@ app.post("/api/bookings", async (req, res) => {
           subject: `New booking through your code ${refInfluencer.code}! 🎉`,
           html: `
             <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
-              <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+              <img src="https://msacbkiskuwvsqdvryfp.supabase.co/storage/v1/object/public/mentor-images/Logo_Dark%20Mode.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
               <h2 style="color:#111;">A session was booked using your code! 🎉</h2>
               <p style="color:#555;">Hey ${refInfluencer.name}, someone just booked a session on Proxima using your referral code <strong style="color:#E93800;">${refInfluencer.code}</strong>.</p>
               <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
@@ -246,7 +246,7 @@ app.post("/api/bookings", async (req, res) => {
       subject: `New Session Booked — ${rest.studentName}`,
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
-          <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+          <img src="https://msacbkiskuwvsqdvryfp.supabase.co/storage/v1/object/public/mentor-images/Logo_Dark%20Mode.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
           <h2 style="color:#111;">New session booked! 🎉</h2>
           <p style="color:#555;">Hi ${mentor.name}, a student has booked a 30-minute session with you.</p>
           <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
@@ -271,7 +271,7 @@ app.post("/api/bookings", async (req, res) => {
       subject: `Your session with ${mentor.name} is confirmed! 🎉`,
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
-          <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+          <img src="https://msacbkiskuwvsqdvryfp.supabase.co/storage/v1/object/public/mentor-images/Logo_Dark%20Mode.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
           <h2 style="color:#111;">Booking Confirmed! 🎉</h2>
           <p style="color:#555;">Hi ${rest.studentName}, your 1-on-1 session is all set.</p>
           <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
@@ -326,7 +326,7 @@ app.put("/api/bookings/:id/meetlink", async (req, res) => {
       subject: `Your session link is ready — ${booking.slot}`,
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
-          <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+          <img src="https://msacbkiskuwvsqdvryfp.supabase.co/storage/v1/object/public/mentor-images/Logo_Dark%20Mode.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
           <h2 style="color:#111;">Your session link is ready! 🎥</h2>
           <p style="color:#555;">Hi ${booking.studentName}, your mentor has shared the Google Meet link.</p>
           <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
@@ -379,7 +379,7 @@ app.put("/api/registrations/:id/approve", async (req, res) => {
       subject: `You're in! Welcome to Proxima 🎉`,
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
-          <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+          <img src="https://msacbkiskuwvsqdvryfp.supabase.co/storage/v1/object/public/mentor-images/Logo_Dark%20Mode.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
           <h2 style="color:#111;">Congratulations, ${reg.name.split(" ")[0]}! 🎉</h2>
           <p style="color:#555;font-size:15px;">Your application has been approved. You are now an official guide on Proxima.</p>
           <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:20px 0;">
@@ -477,7 +477,7 @@ app.post("/api/group-sessions/:id/book", async (req, res) => {
         subject: `Group Session Booked — ${session.topic}`,
         html: `
           <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
-            <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+            <img src="https://msacbkiskuwvsqdvryfp.supabase.co/storage/v1/object/public/mentor-images/Logo_Dark%20Mode.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
             <h2 style="color:#111;">You're in! 🎉</h2>
             <p style="color:#555;">Hi ${name}, your spot in the group session is confirmed.</p>
             <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
@@ -616,7 +616,7 @@ app.post("/api/free-sessions/:id/book", async (req, res) => {
         subject: `Your free session is confirmed! 🎉`,
         html: `
           <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
-            <img src="https://res.cloudinary.com/dlzqb06u6/image/upload/v1775449181/Logo_Dark_Mode_hhg8xt.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
+            <img src="https://msacbkiskuwvsqdvryfp.supabase.co/storage/v1/object/public/mentor-images/Logo_Dark%20Mode.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
             <h2 style="color:#111;">You're booked! 🎉</h2>
             <p style="color:#555;">Hi ${name}, your free session is confirmed.</p>
             <div style="background:#FFF0EB;border-radius:10px;padding:20px;margin:16px 0;">
@@ -632,6 +632,16 @@ app.post("/api/free-sessions/:id/book", async (req, res) => {
       }).catch(e => console.error("Free session email failed:", e.message));
     }
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ONE-TIME FIX — run once then delete
+app.get("/api/fix-broken-photos", async (req, res) => {
+  const mentors = await Mentor.find({ photo: /cloudinary/ });
+  await Mentor.updateMany(
+    { photo: /cloudinary/ },
+    { $set: { photo: "" } }
+  );
+  res.json({ fixed: mentors.length, message: "Cleared broken Cloudinary photos" });
 });
 
 // ─── EXTERNAL ROUTES ─────────────────────────────────────────────────────────
