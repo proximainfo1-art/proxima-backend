@@ -634,15 +634,6 @@ app.post("/api/free-sessions/:id/book", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ONE-TIME FIX — run once then delete
-app.get("/api/fix-broken-photos", async (req, res) => {
-  const mentors = await Mentor.find({ photo: /cloudinary/ });
-  await Mentor.updateMany(
-    { photo: /cloudinary/ },
-    { $set: { photo: "" } }
-  );
-  res.json({ fixed: mentors.length, message: "Cleared broken Cloudinary photos" });
-});
 
 // ─── EXTERNAL ROUTES ─────────────────────────────────────────────────────────
 const paymentRoutes = require("./routes/payment");
