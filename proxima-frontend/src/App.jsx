@@ -1631,10 +1631,16 @@ const saveDetails = async () => {
         )
       )}
     </div>
-    <div style={{ textAlign: "center", background: "rgba(233,56,0,0.08)", border: `1px solid rgba(233,56,0,0.2)`, borderRadius: 14, padding: "16px 24px" }}>
-      <div style={{ fontSize: 40, fontWeight: 700, color: "#E93800", fontFamily: "'Gilroy', sans-serif" }}>{mentor.credits || 0}</div>
-      <div style={{ color: "#888", fontSize: 12, marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>Credits</div>
-    </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ textAlign: "center", background: "rgba(233,56,0,0.08)", border: `1px solid rgba(233,56,0,0.2)`, borderRadius: 14, padding: "16px 24px" }}>
+          <div style={{ fontSize: 40, fontWeight: 700, color: "#E93800", fontFamily: "'Gilroy', sans-serif" }}>{mentor.credits || 0}</div>
+          <div style={{ color: "#888", fontSize: 12, marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>Referral Credits</div>
+        </div>
+        <div style={{ textAlign: "center", background: "rgba(22,163,74,0.08)", border: `1px solid rgba(22,163,74,0.2)`, borderRadius: 14, padding: "16px 24px" }}>
+          <div style={{ fontSize: 40, fontWeight: 700, color: "#16A34A", fontFamily: "'Gilroy', sans-serif" }}>₹{mentor.totalEarnings || 0}</div>
+          <div style={{ color: "#888", fontSize: 12, marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>Total Earnings</div>
+        </div>
+      </div>
   </div>
 </div>
 
@@ -1643,7 +1649,8 @@ const saveDetails = async () => {
             {[
               ["Sessions", mentor.sessions || 0, "📞"],
               ["Bookings", bookings.length, "📅"],
-              ["Credits", mentor.credits || 0, "💰"],
+              ["Credits", mentor.credits || 0, "🎁"],
+              ["Earnings", `₹${mentor.totalEarnings || 0}`, "💰"],
             ].map(([l, v, icon]) => (
               <div key={l} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 12, padding: "16px 20px", textAlign: "center" }}>
                 <div style={{ fontSize: 22, marginBottom: 4 }}>{icon}</div>
@@ -2081,6 +2088,7 @@ function AdminPanel({ onLogout }) {
   const [newInfluencer, setNewInfluencer] = useState({ name: "", email: "" });
   const [freeSessions, setFreeSessions] = useState([]);
   const [showAddFree, setShowAddFree] = useState(false);
+  const [sentMails, setSentMails] = useState([]);
   const [newFree, setNewFree] = useState({ type: "onetoone", mentorId: "", slot: "", topic: "", maxParticipants: 1000 });
   const [freeSlots, setFreeSlots] = useState([]);
 
@@ -2089,7 +2097,7 @@ function AdminPanel({ onLogout }) {
   const editMentorData = useRef({});
 
   const load = useCallback(async () => {
-    const [m, b, r, s, cc, gs, inf, fs] = await Promise.all([
+    const [m, b, r, s, cc, gs, inf, fs, sm] = await Promise.all([
   apiFetch("/mentors?all=true").catch(() => []),
   apiFetch("/bookings").catch(() => []),
   apiFetch("/registrations").catch(() => []),
@@ -2098,14 +2106,15 @@ function AdminPanel({ onLogout }) {
   apiFetch("/group-sessions/admin").catch(() => []),
   apiFetch("/influencers").catch(() => []),
   apiFetch("/free-sessions/admin").catch(() => []),
+  apiFetch("/sent-mails").catch(() => []),
 ]);
 setMentors(m); setBookings(b); setRegs(r); setStats(s); setCustomCalls(cc);
-setGroupSessions(gs); setInfluencers(inf); setFreeSessions(fs);
+setGroupSessions(gs); setInfluencers(inf); setFreeSessions(fs); setSentMails(sm);
     const n = {}; b.forEach(bk => { if (bk.notes) n[bk._id] = bk.notes; });
     setNotes(n);
-    const ml = {}; const sm = {};
-    b.forEach(bk => { if (bk.meetLink) ml[bk._id] = bk.meetLink; if (bk.meetSent) sm[bk._id] = true; });
-    setMeetLinks(ml); setSentMeet(sm);
+    const ml = {}; const meetSentMap = {};
+    b.forEach(bk => { if (bk.meetLink) ml[bk._id] = bk.meetLink; if (bk.meetSent) meetSentMap[bk._id] = true; });
+    setMeetLinks(ml); setSentMeet(meetSentMap);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -2131,7 +2140,7 @@ setGroupSessions(gs); setInfluencers(inf); setFreeSessions(fs);
   };
 
   
-const tabs = ["stats", "mentors", "registrations", "bookings", "customcalls", "groupsessions", "influencers", "freesessions"];
+const tabs = ["stats", "mentors", "registrations", "bookings", "customcalls", "groupsessions", "influencers", "freesessions", "mails"];
 
   return (
     <div style={{ minHeight: "100vh", background: "#FAF7F2", fontFamily: "'Gilroy', sans-serif" }}>
@@ -2204,14 +2213,15 @@ const tabs = ["stats", "mentors", "registrations", "bookings", "customcalls", "g
             <div style={{ background: "#fff", border: "1px solid #E8E2D9", borderRadius: 16, overflow: "hidden" }}>
               <div style={{ padding: "20px 24px", borderBottom: "1px solid #F0EDE8", fontWeight: 700, fontSize: 15, color: "#111" }}>Bookings per Guide</div>
               <table className="ap-table">
-                <thead><tr><th>Guide</th><th>College</th><th>Bookings</th><th>Credits</th></tr></thead>
+                <thead><tr><th>Guide</th><th>College</th><th>Bookings</th><th>Earnings</th><th>Ref Credits</th></tr></thead>
                 <tbody>
                   {[...mentors].sort((a, b) => a.name.localeCompare(b.name)).map(m => (
                     <tr key={m._id}>
                       <td style={{ fontWeight: 600 }}>{m.name}</td>
                       <td style={{ color: "#555" }}>{m.college}</td>
                       <td><span className="ap-badge" style={{ background: "#FFF0EB", color: "#E93800" }}>{(stats.bookingsByMentor || {})[m._id] || 0}</span></td>
-                      <td><span className="ap-badge" style={{ background: "#F0FBF6", color: "#16A34A" }}>{m.credits || 0}</span></td>
+                      <td><span className="ap-badge" style={{ background: "#F0FBF6", color: "#16A34A" }}>₹{m.totalEarnings || 0}</span></td>
+                      <td><span className="ap-badge" style={{ background: "#EFF6FF", color: "#2563EB" }}>{m.credits || 0}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -2337,6 +2347,11 @@ const tabs = ["stats", "mentors", "registrations", "bookings", "customcalls", "g
                       <span style={{ fontSize: 15, color: "#555" }}>📧 {b.studentEmail}</span>
                       <span style={{ fontSize: 15, color: "#555" }}>📞 {b.studentPhone}</span>
                       <span style={{ fontSize: 12, color: "#aaa" }}>{new Date(b.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+                      {b.mentorCollege && <span style={{ background: "#FFF0EB", color: "#E93800", fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20 }}>🎓 {b.mentorCollege}</span>}
+                      {b.mentorCourse && <span style={{ background: "#F0F0FF", color: "#4444CC", fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20 }}>📖 {b.mentorCourse}</span>}
+                      {b.mentorPrice && <span style={{ background: "#F0FBF6", color: "#16A34A", fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20 }}>💰 ₹{b.mentorPrice}</span>}
                     </div>
                     {b.message && <div style={{ marginTop: 10, background: "#FAF7F2", borderRadius: 8, padding: "10px 14px", fontSize: 15, color: "#555", lineHeight: 1.6 }}>{b.message}</div>}
                   </div>
@@ -2697,6 +2712,53 @@ const tabs = ["stats", "mentors", "registrations", "bookings", "customcalls", "g
     ))}
   </div>
 )}
+{tab === "mails" && (
+  <div>
+    <div style={{ fontSize: 22, fontWeight: 800, color: "#111", marginBottom: 8 }}>Sent Mails ({sentMails.length})</div>
+    <div style={{ fontSize: 13, color: "#888", marginBottom: 24 }}>Last 200 emails. Green = delivered to Brevo, Red = failed before sending.</div>
+    {sentMails.length === 0 ? (
+      <div style={{ background: "#fff", border: "1px solid #E8E2D9", borderRadius: 16, padding: 60, textAlign: "center", color: "#888" }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+        <div style={{ fontWeight: 600 }}>No mails logged yet</div>
+      </div>
+    ) : (
+      <div style={{ background: "#fff", border: "1px solid #E8E2D9", borderRadius: 16, overflow: "hidden" }}>
+        <table className="ap-table">
+          <thead>
+            <tr>
+              <th>To</th>
+              <th>Subject</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sentMails.map(m => (
+              <tr key={m._id}>
+                <td style={{ fontWeight: 500 }}>{m.to}</td>
+                <td style={{ color: "#555", fontSize: 13, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.subject}</td>
+                <td>
+                  <span style={{ background: "#F0F0FF", color: "#4444CC", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20 }}>
+                    {m.type}
+                  </span>
+                </td>
+                <td>
+                  <span style={{ background: m.status === "sent" ? "#F0FBF6" : "#FFF5F5", color: m.status === "sent" ? "#16A34A" : "#DC2626", border: `1px solid ${m.status === "sent" ? "#BBF0D6" : "#FECACA"}`, fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>
+                    {m.status === "sent" ? "✓ Sent" : "✗ Failed"}
+                  </span>
+                  {m.error && <div style={{ fontSize: 11, color: "#DC2626", marginTop: 3 }}>{m.error}</div>}
+                </td>
+                <td style={{ fontSize: 12, color: "#aaa" }}>{new Date(m.createdAt).toLocaleString("en-IN")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+)}
+
       {showAddMentor && <MentorForm data={newMentorData.current} onChange={handleNewMentorChange} onSave={addMentor} onCancel={() => setShowAddMentor(false)} />}
       {editMentor && <MentorForm data={editMentor} onChange={handleEditMentorChange} onSave={saveMentor} onCancel={() => setEditMentor(null)} />}
     </div>

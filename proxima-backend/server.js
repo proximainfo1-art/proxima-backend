@@ -5,20 +5,26 @@ const cors = require("cors");
 const axios = require("axios");
 
 const mailer = {
-  sendMail: async ({ from, to, subject, html }) => {
+  sendMail: async ({ from, to, subject, html, _type, _relatedId }) => {
     const name = from.includes("<") ? from.split("<")[0].trim() : "Proxima";
     const email = from.includes("<") ? from.split("<")[1].replace(">", "").trim() : from;
-    await axios.post("https://api.brevo.com/v3/smtp/email", {
-      sender: { name, email },
-      to: [{ email: to }],
-      subject,
-      htmlContent: html,
-    }, {
-      headers: {
-        "api-key": process.env.BREVO_API_KEY,
-        "Content-Type": "application/json",
-      },
-    });
+    try {
+      await axios.post("https://api.brevo.com/v3/smtp/email", {
+        sender: { name, email },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }, {
+        headers: {
+          "api-key": process.env.BREVO_API_KEY,
+          "Content-Type": "application/json",
+        },
+      });
+      SentMail.create({ to, subject, type: _type || "general", relatedId: _relatedId || "", status: "sent" }).catch(() => {});
+    } catch (err) {
+      SentMail.create({ to, subject, type: _type || "general", relatedId: _relatedId || "", status: "failed", error: err.message }).catch(() => {});
+      throw err;
+    }
   },
 };
 
@@ -39,6 +45,7 @@ const MentorSchema = new mongoose.Schema({
   bio: String, photo: String, email: String, whatsapp: String,
   price: { type: Number, default: 299 }, rating: { type: Number, default: 5 },
   sessions: { type: Number, default: 0 }, credits: { type: Number, default: 0 },
+  totalEarnings: { type: Number, default: 0 },
   referralCode: String, pin: { type: String, default: "0000" },
   visible: { type: Boolean, default: true },
   featured: { type: Boolean, default: false },
@@ -51,6 +58,9 @@ const BookingSchema = new mongoose.Schema({
   studentName: String, studentEmail: String, studentPhone: String,
   referralCode: String, message: String,
   notes: String, meetLink: String, meetSent: { type: Boolean, default: false },
+  mentorCollege: String,
+  mentorCourse: String,
+  mentorPrice: { type: Number, default: 299 },
   paymentId: { type: String, default: null },
   paymentStatus: { type: String, enum: ["pending", "paid"], default: "pending" },
 }, { timestamps: true });
@@ -188,6 +198,13 @@ app.post("/api/bookings", async (req, res) => {
 
   const slotIdx = mentor.slots.findIndex(s => s.display === slot);
   if (slotIdx !== -1) mentor.slots[slotIdx].status = "booked";
+
+  // Calculate mentor's cut
+  const priceToEarnings = { 149: 100, 199: 125, 249: 175, 299: 200 };
+  const mentorEarning = priceToEarnings[mentor.price] || 200;
+  mentor.totalEarnings = (mentor.totalEarnings || 0) + mentorEarning;
+  mentor.sessions = (mentor.sessions || 0) + 1;
+
   await mentor.save();
 
   if (referralCode) {
@@ -210,6 +227,8 @@ app.post("/api/bookings", async (req, res) => {
           from: process.env.MAIL_FROM,
           to: refInfluencer.email,
           subject: `New booking through your code ${refInfluencer.code}! 🎉`,
+          _type: "influencer",
+          _relatedId: refInfluencer._id?.toString(),
           html: `
             <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
               <img src="https://msacbkiskuwvsqdvryfp.supabase.co/storage/v1/object/public/mentor-images/Logo_Dark%20Mode.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
@@ -233,7 +252,22 @@ app.post("/api/bookings", async (req, res) => {
     }
   }
 
-  const booking = await Booking.create({ mentorId, slot, referralCode, ...rest });
+  const booking = await Booking.create({ 
+  mentorId, slot, referralCode, 
+  mentorCollege: mentor.college,
+  mentorCourse: mentor.course,
+  mentorPrice: mentor.price || 299,
+  ...rest 
+});
+
+// GET sent mails (admin)
+app.get("/api/sent-mails", async (req, res) => {
+  try {
+    const mails = await SentMail.find().sort({ createdAt: -1 }).limit(200);
+    res.json(mails);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 
   // Respond immediately — emails fire in background
   res.json(booking);
@@ -244,6 +278,8 @@ app.post("/api/bookings", async (req, res) => {
       from: process.env.MAIL_FROM,
       to: mentor.email,
       subject: `New Session Booked — ${rest.studentName}`,
+      _type: "mentor_booking",
+      _relatedId: booking._id?.toString(),
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
           <img src="https://msacbkiskuwvsqdvryfp.supabase.co/storage/v1/object/public/mentor-images/Logo_Dark%20Mode.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
@@ -269,6 +305,8 @@ app.post("/api/bookings", async (req, res) => {
       from: process.env.MAIL_FROM,
       to: rest.studentEmail,
       subject: `Your session with ${mentor.name} is confirmed! 🎉`,
+      _type: "mentee_booking",
+      _relatedId: booking._id?.toString(),
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
           <img src="https://msacbkiskuwvsqdvryfp.supabase.co/storage/v1/object/public/mentor-images/Logo_Dark%20Mode.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
@@ -324,6 +362,8 @@ app.put("/api/bookings/:id/meetlink", async (req, res) => {
       from: process.env.MAIL_FROM,
       to: booking.studentEmail,
       subject: `Your session link is ready — ${booking.slot}`,
+      _type: "meet_link",
+      _relatedId: req.params.id,
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
           <img src="https://msacbkiskuwvsqdvryfp.supabase.co/storage/v1/object/public/mentor-images/Logo_Dark%20Mode.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
@@ -377,6 +417,8 @@ app.put("/api/registrations/:id/approve", async (req, res) => {
       from: process.env.MAIL_FROM,
       to: reg.email,
       subject: `You're in! Welcome to Proxima 🎉`,
+      _type: "approval",
+      _relatedId: reg._id?.toString(),
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;border:1px solid #E8E2D9;border-radius:12px;">
           <img src="https://msacbkiskuwvsqdvryfp.supabase.co/storage/v1/object/public/mentor-images/Logo_Dark%20Mode.png" alt="Proxima" style="height:32px;margin-bottom:24px;" />
@@ -597,6 +639,18 @@ app.post("/api/free-sessions/:id/book", async (req, res) => {
     if (!session) return res.status(404).json({ error: "Session not found" });
     if (session.participants.length >= session.maxParticipants) return res.status(400).json({ error: "Session is full" });
     const { name, email, phone } = req.body;
+
+
+const SentMailSchema = new mongoose.Schema({
+  to: String,
+  subject: String,
+  type: String, // "mentor_booking" | "mentee_booking" | "meet_link" | "approval" | "influencer" | "group" | "free"
+  relatedId: String, // bookingId, sessionId etc
+  status: { type: String, enum: ["sent", "failed"], default: "sent" },
+  error: String,
+}, { timestamps: true });
+
+const SentMail = mongoose.model("SentMail", SentMailSchema);
 
     // Check for duplicate registration by email or phone
     const alreadyRegistered = session.participants.some(
