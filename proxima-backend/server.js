@@ -122,7 +122,10 @@ app.post("/api/admin/login", (req, res) => {
 // Mentor login
 app.post("/api/mentor/login", async (req, res) => {
   const { email, pin } = req.body;
-  const mentor = await Mentor.findOne({ email: email.toLowerCase().trim(), pin });
+  const mentor = await Mentor.findOne({ 
+    email: { $regex: new RegExp(`^${email.trim()}$`, "i") }, 
+    pin 
+  });
   if (!mentor) return res.status(401).json({ error: "Invalid email or PIN" });
   res.json(mentor);
 });
@@ -152,6 +155,7 @@ app.post("/api/mentors", async (req, res) => {
 // PUT mentor (admin edit) — never overwrite slots
 app.put("/api/mentors/:id", async (req, res) => {
   const { slots, ...safeBody } = req.body;
+  if (safeBody.email) safeBody.email = safeBody.email.toLowerCase().trim();
   const mentor = await Mentor.findByIdAndUpdate(req.params.id, safeBody, { new: true });
   res.json(mentor);
 });
