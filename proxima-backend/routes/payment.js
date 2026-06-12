@@ -11,8 +11,12 @@ const razorpay = new Razorpay({
 // POST /api/payment/create-order
 router.post('/create-order', async (req, res) => {
   try {
-    const { amount, mentorId, slot, studentName } = req.body;
-    const amountInPaise = Math.round(Number(amount) * 100);
+    const { amount, mentorId, slot, studentName, discountCode } = req.body;
+    const DISCOUNT_CODE = "PROXIMA20";
+    const discountedAmount = discountCode?.toUpperCase() === DISCOUNT_CODE
+      ? Math.round(Number(amount) * 0.8)
+      : Number(amount);
+    const amountInPaise = Math.round(discountedAmount * 100);
     if (!amountInPaise || amountInPaise < 100) {
       return res.status(400).json({ error: 'Invalid amount' });
     }

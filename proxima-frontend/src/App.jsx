@@ -1132,7 +1132,7 @@ const [form, setForm] = useState({ name: "", email: "", phone: "", code: session
             <div style={RS}>
               <div style={{ fontWeight: 600, fontSize: 15, color: "#111", marginBottom: 18 }}>Please fill your details to confirm booking</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 12, width: "100%" }}>
-{[["Enter Full Name*","name","text","John Doe"],["Enter Email*","email","email","johnydoe@gmail.com"],["Enter Phone Number*","phone","tel","9876543210"],["Referral Code (optional)","code","text","Enter referral code"]].map(([label,key,type,ph]) => (                  <div key={key} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+{[["Enter Full Name*","name","text","John Doe"],["Enter Email*","email","email","johnydoe@gmail.com"],["Enter Phone Number*","phone","tel","9876543210"],["Referral / Discount Code (optional)","code","text","Enter referral or discount code"]].map(([label,key,type,ph]) => (                  <div key={key} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                     <label style={{ fontSize: 12, color: "#555", fontWeight: 500 }}>{label}</label>
                     <input type={type} placeholder={ph} value={form[key]} onChange={e => upd(key, e.target.value)}
                       style={{ border: "1.5px solid #ddd", borderRadius: 8, padding: "10px 12px", fontSize: 14, outline: "none", fontFamily: "'Gilroy', sans-serif", color: "#111", background: "#fff", width: "100%", boxSizing: "border-box" }}
@@ -1187,7 +1187,7 @@ function BookingFlow({ mentor, slot, onDone }) {
       if (!loaded) throw new Error("Razorpay failed to load");
       const { orderId, amount } = await apiFetch("/payment/create-order", {
         method: "POST",
-        body: { amount: mentor.price || 299, mentorId: mentor._id, slot, studentName: form.name },
+        body: { amount: mentor.price || 299, mentorId: mentor._id, slot, studentName: form.name, discountCode: form.code },
       });
       const options = {
         key: RAZORPAY_KEY,
