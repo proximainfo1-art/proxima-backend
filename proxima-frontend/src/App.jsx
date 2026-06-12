@@ -1162,12 +1162,10 @@ const [form, setForm] = useState({ name: "", email: "", phone: "", code: session
   );
 }
 
-function BookingFlow({ mentor, slot, onDone }) {
+function BookingFlow({ mentor, slot, form: passedForm, onDone }) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const [form, setForm] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem("proxima_booking_form") || "{}"); } catch { return {}; }
-  });
+  const [form] = useState(passedForm || {});
 
   const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID;
 
@@ -3170,8 +3168,8 @@ export default function App() {
           </div>
         </div>
       )}      {view === "group" && <GroupDiscovery />}
-      {view === "discovery" && <MentorDiscovery onBook={(m,s) => { setBookData({mentor:m,slot:s}); navigate("booking"); }} />}
-      {view === "booking" && bookData && <BookingFlow mentor={bookData.mentor} slot={bookData.slot} onDone={() => { setBookData(null); navigate("discovery"); }} />}
+      {view === "discovery" && <MentorDiscovery onBook={(m,s,f) => { setBookData({mentor:m,slot:s,form:f}); navigate("booking"); }} />}
+      {view === "booking" && bookData && <BookingFlow mentor={bookData.mentor} slot={bookData.slot} form={bookData.form} onDone={() => { setBookData(null); navigate("discovery"); }} />}
       {view === "register" && <MentorRegistration onDone={() => navigate("landing")} />}
       <footer style={{ textAlign: "center", padding: "20px", borderTop: `1px solid ${S.border}`, color: "#555", fontSize: 12 }}>
         © 2025 Proxima &nbsp;·&nbsp;
