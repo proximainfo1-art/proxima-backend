@@ -112,6 +112,10 @@ const Influencer = mongoose.model("Influencer", InfluencerSchema);
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 
 // Admin login
+app.get("/api/test-discount", (req, res) => {
+  const code = "PROXIMA20";
+  res.json({ code, working: true, version: "v2" });
+});
 app.post("/api/admin/login", (req, res) => {
   const { password } = req.body;
   if (!process.env.ADMIN_PASSWORD) return res.status(500).json({ error: "Server misconfigured: ADMIN_PASSWORD not set" });
