@@ -1147,7 +1147,8 @@ const [form, setForm] = useState({ name: "", email: "", phone: "", code: session
                   onFocus={e => e.target.style.borderColor="#E93800"} onBlur={e => e.target.style.borderColor="#ddd"} />
               </div>
               <div style={{ textAlign: "right" }}>
-                <button onClick={() => { if (!form.name||!form.email||!form.phone||!form.message) { alert("Please fill all required fields."); return; } onBook(mentor, `${selectedDay?.dayName} ${selectedSlot}`, form); }}
+                <button onClick={() => { if (!form.name||!form.email||!form.phone||!form.message) { alert("Please fill all required fields."); return; } sessionStorage.setItem("proxima_booking_form", JSON.stringify(form));
+onBook(mentor, `${selectedDay?.dayName} ${selectedSlot}`, form); }}
                   style={{ background: "#111", color: "#fff", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "'Gilroy', sans-serif" }}>
                   Secure Checkout →
                 </button>
@@ -1165,7 +1166,10 @@ const [form, setForm] = useState({ name: "", email: "", phone: "", code: session
 function BookingFlow({ mentor, slot, form: passedForm, onDone }) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const [form] = useState(passedForm || {});
+  const [form] = useState(() => {
+    if (passedForm && passedForm.name) return passedForm;
+    try { return JSON.parse(sessionStorage.getItem("proxima_booking_form") || "{}"); } catch { return {}; }
+  });
 
   const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID;
 
