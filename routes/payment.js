@@ -8,18 +8,21 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// POST /api/payment/create-order
 router.post('/create-order', async (req, res) => {
   try {
-    const { amount, mentorId, slot, studentName } = req.body;
-    const amountInPaise = Math.round(Number(amount) * 100);
+    const { amount, mentorId, slot, studentName, discountCode } = req.body;
+    const DISCOUNT_CODE = 'PROXIMA20';
+    const discountedAmount = discountCode && discountCode.toUpperCase() === DISCOUNT_CODE
+      ? Math.round(Number(amount) * 0.8)
+      : Number(amount);
+    const amountInPaise = Math.round(discountedAmount * 100);
     if (!amountInPaise || amountInPaise < 100) {
       return res.status(400).json({ error: 'Invalid amount' });
     }
     const order = await razorpay.orders.create({
       amount: amountInPaise,
       currency: 'INR',
-      receipt: `receipt_${Date.now()}`,
+      receipt: 'receipt_' + Date.now(),
       notes: { mentorId, slot, studentName },
     });
     res.json({ orderId: order.id, amount: order.amount, currency: order.currency });
@@ -29,7 +32,6 @@ router.post('/create-order', async (req, res) => {
   }
 });
 
-// POST /api/payment/verify
 router.post('/verify', async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
