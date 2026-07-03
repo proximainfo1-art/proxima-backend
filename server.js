@@ -219,9 +219,8 @@ app.post("/api/bookings", async (req, res) => {
   if (slotIdx !== -1) mentor.slots[slotIdx].status = "booked";
 
   // Calculate mentor's cut
-  const FLASH_SALE_ACTIVE = true;
   const priceToEarnings = { 149: 100, 199: 125, 249: 175, 299: 200 };
-  const mentorEarning = FLASH_SALE_ACTIVE ? 25 : (priceToEarnings[mentor.price] || 200);
+  const mentorEarning = priceToEarnings[mentor.price] || 200;
   mentor.totalEarnings = (mentor.totalEarnings || 0) + mentorEarning;
   mentor.sessions = (mentor.sessions || 0) + 1;
 
