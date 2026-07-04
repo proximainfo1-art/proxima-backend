@@ -102,6 +102,17 @@ const RedemptionSchema = new mongoose.Schema({
 
 const Redemption = mongoose.model("Redemption", RedemptionSchema);
 
+const SentMailSchema = new mongoose.Schema({
+  to: String,
+  subject: String,
+  type: String,
+  relatedId: String,
+  status: { type: String, enum: ["sent", "failed"], default: "sent" },
+  error: String,
+}, { timestamps: true });
+
+const SentMail = mongoose.model("SentMail", SentMailSchema);
+
 const FreeSessionSchema = new mongoose.Schema({
   type: { type: String, enum: ["onetoone", "group"], default: "onetoone" },
   mentorId: String, mentorName: String, mentorPhoto: String,
@@ -279,15 +290,6 @@ app.post("/api/bookings", async (req, res) => {
   mentorPrice: mentor.price || 299,
   ...rest 
 });
-
-// GET sent mails (admin)
-app.get("/api/sent-mails", async (req, res) => {
-  try {
-    const mails = await SentMail.find().sort({ createdAt: -1 }).limit(200);
-    res.json(mails);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 
   // Respond immediately — emails fire in background
   res.json(booking);
@@ -730,18 +732,6 @@ app.post("/api/free-sessions/:id/book", async (req, res) => {
     if (session.participants.length >= session.maxParticipants) return res.status(400).json({ error: "Session is full" });
     const { name, email, phone } = req.body;
 
-
-const SentMailSchema = new mongoose.Schema({
-  to: String,
-  subject: String,
-  type: String, // "mentor_booking" | "mentee_booking" | "meet_link" | "approval" | "influencer" | "group" | "free"
-  relatedId: String, // bookingId, sessionId etc
-  status: { type: String, enum: ["sent", "failed"], default: "sent" },
-  error: String,
-}, { timestamps: true });
-
-const SentMail = mongoose.model("SentMail", SentMailSchema);
-
     // Check for duplicate registration by email or phone
     const alreadyRegistered = session.participants.some(
       p => p.email?.toLowerCase() === email?.toLowerCase() || p.phone === phone
@@ -778,6 +768,14 @@ const SentMail = mongoose.model("SentMail", SentMailSchema);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// GET sent mails (admin)
+app.get("/api/sent-mails", async (req, res) => {
+  try {
+    const mails = await SentMail.find().sort({ createdAt: -1 }).limit(200);
+    res.json(mails);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ─── EXTERNAL ROUTES ─────────────────────────────────────────────────────────
 const paymentRoutes = require("./routes/payment");
