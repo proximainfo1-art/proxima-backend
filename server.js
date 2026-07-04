@@ -42,6 +42,7 @@ const SlotSchema = new mongoose.Schema({ day: String, time: String, display: Str
 
 const MentorSchema = new mongoose.Schema({
   name: String, college: String, course: String, year: String,
+  collegeId: String, linkedin: String,
   bio: String, photo: String, email: String, whatsapp: String,
   price: { type: Number, default: 299 }, rating: { type: Number, default: 5 },
   sessions: { type: Number, default: 0 }, credits: { type: Number, default: 0 },
@@ -67,6 +68,7 @@ const BookingSchema = new mongoose.Schema({
 
 const RegistrationSchema = new mongoose.Schema({
   name: String, college: String, course: String, year: String,
+  collegeId: String, linkedin: String,
   email: String, whatsapp: String, bio: String, photo: String,
   status: { type: String, default: "pending" },
 }, { timestamps: true });
@@ -425,6 +427,7 @@ app.put("/api/registrations/:id/approve", async (req, res) => {
   const referralCode = `${firstName}10`;
   const mentor = await Mentor.create({
     name: reg.name, college: reg.college, course: reg.course, year: reg.year,
+    collegeId: reg.collegeId, linkedin: reg.linkedin,
     email: reg.email.toLowerCase().trim(), whatsapp: reg.whatsapp,
     bio: reg.bio, photo: reg.photo, visible: true, pin: "0000", referralCode,
   });
