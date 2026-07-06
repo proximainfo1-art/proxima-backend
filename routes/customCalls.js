@@ -9,14 +9,16 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-const CustomCall = mongoose.model('CustomCall', new mongoose.Schema({
+const CustomCallSchema = new mongoose.Schema({
   name: String, phone: String, email: String,
   targetCollege: String, targetCourse: String, note: String,
   status: { type: String, default: 'pending' },
   paymentId: { type: String, default: null },
   paymentStatus: { type: String, enum: ['pending', 'paid'], default: 'pending' },
   createdAt: { type: Date, default: Date.now }
-}));
+});
+
+const CustomCall = mongoose.models.CustomCall || mongoose.model('CustomCall', CustomCallSchema);
 
 // POST — create Razorpay order for custom call
 router.post('/create-order', async (req, res) => {
