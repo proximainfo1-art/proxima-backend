@@ -1,4 +1,5 @@
 require("dotenv").config();
+console.log("SERVER FILE LOADED - VERSION 99");
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
