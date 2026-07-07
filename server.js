@@ -786,6 +786,14 @@ app.use("/api/payment", paymentRoutes);
 
 const { router: customCallsRouter } = require('./routes/customCalls');
 app.use('/api/custom-calls', customCallsRouter);
+app.post('/api/custom-calls/create-order-direct', async (req, res) => {
+  try {
+    const Razorpay = require('razorpay');
+    const rz = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
+    const order = await rz.orders.create({ amount: 39900, currency: 'INR', receipt: `custom_${Date.now()}` });
+    res.json({ orderId: order.id, amount: order.amount });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 // TEMP DEBUG
 app.post('/api/test-custom-order', async (req, res) => {
