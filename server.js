@@ -787,6 +787,11 @@ app.use("/api/payment", paymentRoutes);
 const { router: customCallsRouter } = require('./routes/customCalls');
 app.use('/api/custom-calls', customCallsRouter);
 
+// TEMP DEBUG
+app.post('/api/test-custom-order', async (req, res) => {
+  res.json({ working: true });
+});
+
 // ─── START ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`Proxima server running on port ${PORT}`);
