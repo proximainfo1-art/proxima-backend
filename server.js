@@ -32,6 +32,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// TEMP DEBUG
+app.post('/api/test-custom-order', async (req, res) => {
+  res.json({ working: true });
+});
+
+
+
+
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/proxima";
 const PORT = process.env.PORT || 5000;
 
@@ -785,7 +793,8 @@ const paymentRoutes = require("./routes/payment");
 app.use("/api/payment", paymentRoutes);
 
 const { router: customCallsRouter } = require('./routes/customCalls');
-app.use('/api/custom-calls', customCallsRouter);
+
+// Direct custom call routes — must be BEFORE router mount
 app.post('/api/custom-calls/create-order-direct', async (req, res) => {
   try {
     const Razorpay = require('razorpay');
@@ -795,10 +804,22 @@ app.post('/api/custom-calls/create-order-direct', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// TEMP DEBUG
-app.post('/api/test-custom-order', async (req, res) => {
-  res.json({ working: true });
+app.post('/api/custom-calls/verify-and-save-direct', async (req, res) => {
+  try {
+    const crypto = require('crypto');
+    const mongoose = require('mongoose');
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, name, phone, email, targetCollege, targetCourse, note } = req.body;
+    const expectedSignature = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET).update(`${razorpay_order_id}|${razorpay_payment_id}`).digest('hex');
+    if (expectedSignature !== razorpay_signature) return res.status(400).json({ error: 'Payment verification failed' });
+    const CustomCall = mongoose.models.CustomCall;
+    const doc = await CustomCall.create({ name, phone, email, targetCollege, targetCourse, note, paymentId: razorpay_payment_id, paymentStatus: 'paid', status: 'pending' });
+    console.log(`[CUSTOM CALL PAID] ${doc.name} → ${doc.targetCourse} @ ${doc.targetCollege}`);
+    res.json({ success: true, id: doc._id });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+app.use('/api/custom-calls', customCallsRouter);
+
 
 // ─── START ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
